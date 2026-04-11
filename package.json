@@ -1,0 +1,10 @@
+{
+  "name": "samvad",
+  "private": true,
+  "license": "Apache-2.0",
+  "workspaces": ["packages/*", "examples/*"],
+  "scripts": {
+    "test": "npm test --workspaces",
+    "build": "npm run build --workspaces"
+  }
+}

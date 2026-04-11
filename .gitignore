@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Never commit cryptographic private keys
+.samvad/
+
+# Superpowers workflow artifacts (brainstorm state, specs, plans)
+.superpowers/
+docs/superpowers/
