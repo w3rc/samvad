@@ -4,7 +4,6 @@ import { buildRedTeamSkill } from './critic.js'
 import { buildResearchSkill } from './researcher.js'
 
 const TOPIC = process.argv[2] ?? 'AI will replace software engineers'
-const MOCK = !process.env.OPENAI_API_KEY
 const RED_TEAM_PORT = 3011
 const RESEARCHER_PORT = 3010
 const RED_TEAM_URL = `http://localhost:${RED_TEAM_PORT}`
@@ -22,7 +21,8 @@ async function main() {
   console.log()
   console.log(bold('SAMVAD — Research + Red Team Demo'))
   console.log(dim(`Topic: "${TOPIC}"`))
-  if (MOCK) console.log(dim('[mock mode — set OPENAI_API_KEY to use real GPT-4o-mini]'))
+  console.log(dim(`  research:  ${process.env.OPENROUTER_API_KEY ? 'OpenRouter google/gemma-3-27b-it:free' : 'mock mode — set OPENROUTER_API_KEY'}`))
+  console.log(dim(`  red team:  ${process.env.GROQ_API_KEY ? 'Groq llama-3.1-8b-instant' : 'mock mode — set GROQ_API_KEY'}`))
   console.log()
 
   // ── Step 1: Pre-generate all keypairs ──────────────────────────────────────
@@ -52,7 +52,7 @@ async function main() {
 
   // Red team trusts researcher's outbound keypair
   redTeamAgent.trustPeer('agent://researcher-outbound.local', researcherOutboundClient.publicKey)
-  redTeamAgent.skill('red_team', buildRedTeamSkill(MOCK))
+  redTeamAgent.skill('red_team', buildRedTeamSkill())
 
   // ── Step 3: Start red team server ──────────────────────────────────────────
   await redTeamAgent.serve({ port: RED_TEAM_PORT })
@@ -73,7 +73,7 @@ async function main() {
 
   // Researcher trusts the runner (this orchestrator)
   researcherAgent.trustPeer('agent://runner.local', runnerClient.publicKey)
-  researcherAgent.skill('brief', buildResearchSkill(MOCK, researcherOutboundClient))
+  researcherAgent.skill('brief', buildResearchSkill(researcherOutboundClient))
 
   // ── Step 6: Start researcher server ───────────────────────────────────────
   await researcherAgent.serve({ port: RESEARCHER_PORT })
