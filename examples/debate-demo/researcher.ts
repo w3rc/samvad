@@ -59,7 +59,7 @@ export function buildResearchSkill(mock: boolean, redTeamClient: AgentClient) {
         confidenceScore = MOCK_BRIEF.confidenceScore
       } else {
         const completion = await openai.chat.completions.create({
-          model: 'gpt-4o-mini',
+          model: 'gpt-4o',
           max_tokens: 512,
           messages: [{
             role: 'user',
