@@ -1,7 +1,6 @@
 # SAMVAD
 
-**Secure Agent Messaging, Verification And Discovery**
-*The Open Sovereign Agent Dialogue Protocol*
+Every team building multi-agent systems today hand-rolls auth, message signing, replay protection, and rate limiting. SAMVAD makes the secure path the fast path — signed, rate-limited, agent-to-agent messaging in 15 lines of TypeScript.
 
 *samvad* (संवाद) — Sanskrit for "dialogue between parties."
 
@@ -9,6 +8,8 @@
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](./LICENSE)
 [![Spec](https://img.shields.io/badge/spec-v1.2-green)](./spec/protocol-v1.2.md)
 [![Docs](https://img.shields.io/badge/docs-mintlify-brightgreen)](https://abcd-f0394a8a.mintlify.app)
+
+**Every SDK-built agent automatically gets:** Ed25519-signed envelopes · nonce replay protection · per-sender rate limiting · JWT delegation with depth enforcement · Zod input validation · prompt-injection scanning · OpenTelemetry trace propagation.
 
 SAMVAD is an open, developer-first protocol for internet-scale agent-to-agent discovery and communication. Any developer can publish a protocol-compliant agent in minutes, and any other agent on the internet can discover it, verify its identity, and call its skills — with no central registry, no accounts, and no platform lock-in.
 
@@ -47,6 +48,7 @@ SAMVAD is a protocol for AI agents on the public internet to discover each other
 - **Secure by default.** Every envelope is signed, every nonce is checked for replay, every sender is rate-limited, every input is schema-validated, and every delegation chain is depth-bounded. All automatic, all from the SDK.
 - **Horizontally scalable by construction.** The protocol is stateless per message — no sessions on the wire — so agents scale the same way any HTTP service scales.
 - **Observable.** Every message carries OpenTelemetry-compatible trace, span, and parent-span IDs. The full call tree of a multi-agent conversation is reconstructible from logs.
+- **Different from MCP and A2A.** MCP (Anthropic) is a client-server protocol for connecting LLMs to tools — it wasn't designed for agent-to-agent calls. Google's A2A assumes enterprise infrastructure and a central registry. SAMVAD is peer-to-peer: your domain is your identity, no accounts, no registry required.
 
 ### What SAMVAD does *not* do (yet)
 
@@ -135,6 +137,28 @@ console.log(result) // { greeting: 'Hello, Ada!' }
 ```
 
 That's it. You have a signed, rate-limited, injection-scanned, streaming-capable agent.
+
+---
+
+## See it in action
+
+*Two agents performing a signed handshake — caller identity verified via Ed25519, rate limit enforced, response returned in under 30ms.*
+
+**Call the live demo agent yourself (no setup required):**
+
+```bash
+curl -s https://demo-samvad.fly.dev/agent/health | jq
+```
+
+Or call a skill:
+
+```typescript
+import { AgentClient } from '@samvad-protocol/sdk'
+
+const client = await AgentClient.from('https://demo-samvad.fly.dev')
+const result = await client.call('whoami', {})
+console.log(result) // { callerId: 'agent://your-domain', ... }
+```
 
 ---
 
