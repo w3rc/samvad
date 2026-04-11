@@ -1,0 +1,268 @@
+---
+title: FAQ
+description: Frequently asked questions about SAMVAD — the protocol, the SDK, security, deployment, and licensing.
+---
+
+## General
+
+<AccordionGroup>
+
+<Accordion title="What is SAMVAD?">
+SAMVAD (Secure Agent Messaging, Verification And Discovery) is an open protocol for AI agents on the public internet to discover each other, verify each other's identity, and exchange typed messages — with no central authority, no platform sign-up, and a ten-minute path from zero to a working agent.
+
+It defines a wire format (signed JSON envelopes), a standard set of endpoints every agent exposes, and a security model (Ed25519 signing, nonce replay protection, rate limiting, trust tiers, JWT delegation) that compliant SDKs enforce automatically.
+</Accordion>
+
+<Accordion title="Is SAMVAD production-ready?">
+SAMVAD is pre-1.0. Protocol version 1.1 is stable and the TypeScript SDK is feature-complete for the core protocol. APIs may change before 1.0.
+
+It is suitable for experimentation, internal tooling, and early-adopter projects. For high-stakes production use, treat it as you would any pre-1.0 open-source dependency: pin your version and monitor the changelog.
+</Accordion>
+
+<Accordion title="Do I need to register anywhere to use SAMVAD?">
+No. Your domain is your identity. If you can serve HTTPS and host a JSON file at `/.well-known/agent.json`, you're on the network. No accounts, no registry gate, no API keys to establish who you are.
+
+An optional public registry for search-by-specialization is on the roadmap, but participation in the registry is never required to call or be called by other agents.
+</Accordion>
+
+<Accordion title="How is SAMVAD different from just building a REST API?">
+A REST API is a service you build for humans or for a specific client you control. SAMVAD is a protocol for agents that have never met each other to communicate safely.
+
+The key differences:
+- **Identity is built-in.** Every message is signed by the sender's Ed25519 key, which is declared in their public agent card. There is no shared secret to manage.
+- **Security is automatic.** Replay protection, rate limiting, input validation, trust tiers, and delegation — all enforced by the SDK before your handler runs.
+- **Discovery is part of the protocol.** Any agent can fetch another agent's card, read its skills, and call them — without you writing any client code for that specific agent.
+- **Typed, versioned skills.** Skills declare Zod/JSON Schema input and output contracts. Callers know what to send; receivers validate it automatically.
+</Accordion>
+
+<Accordion title="What does 'sovereign' mean in the tagline?">
+"The Open Sovereign Agent Dialogue Protocol" — *sovereign* means no central authority controls participation. Your domain is your identity, your server runs your code, and you decide which agents can call you and on what terms. No platform can deplatform you, throttle you, or gate your access to the network.
+</Accordion>
+
+<Accordion title="What is the agent:// URI scheme?">
+`agent://myagent.com` is shorthand for `https://myagent.com`. It makes agent identity explicit in logs, envelopes, and allow-lists. There is no new DNS resolver — it maps directly to HTTPS.
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Security
+
+<AccordionGroup>
+
+<Accordion title="What happens if my private key is compromised?">
+Set the compromised key's `"active": false` in your agent card. Receivers re-fetch the card after `cardTTL` seconds (default 300), so the revocation propagates globally within 5 minutes — no central revocation server needed.
+
+After revoking, generate a new keypair. The SDK stores keys in `.samvad/keys/`; delete the old key file and restart the agent to generate a fresh one.
+</Accordion>
+
+<Accordion title="Can I use SAMVAD over plain HTTP?">
+In development, yes — the SDK does not enforce HTTPS. In production, no. SAMVAD's identity model anchors in web PKI: an agent's identity is verified by its TLS certificate matching its claimed domain. Without HTTPS, the L1 security layer (Agent Identity) is absent and the protocol's trust assumptions break.
+</Accordion>
+
+<Accordion title="How does replay protection work?">
+Every request envelope includes a `nonce` (random string) and a `timestamp` (ISO 8601 UTC). Receivers:
+
+1. Reject envelopes older than **5 minutes** (timestamp check)
+2. Track every nonce seen within the 5-minute window and reject duplicates
+
+This means an attacker who captures a valid signed message cannot replay it after 5 minutes, and cannot replay it a second time within that window.
+</Accordion>
+
+<Accordion title="Is the prompt injection scanner reliable?">
+No — and it's documented as such. The built-in regex scanner catches obvious injection strings but OWASP GenAI Security research shows adaptive attacks bypass regex-based detectors with over 90% success rate.
+
+The scanner is a useful first-pass speed bump, not a safety proof. For high-trust skills:
+- Use an LLM-based classifier (LLM Guard, Guardrails AI)
+- Apply least-privilege to whatever the handler touches
+- Wrap peer input in an untrusted-input boundary before it enters an LLM context
+
+LLM-based classifier integration is on the SAMVAD roadmap.
+</Accordion>
+
+<Accordion title="Can a trusted-peers allowlist be spoofed?">
+No. The `trusted-peers` trust tier enforces both the sender's declared `agent://` ID *and* their Ed25519 signature. A caller claiming to be `agent://billing.internal` must also produce a valid signature from the key registered via `agent.trustPeer()`. Claiming an ID without the matching private key fails at L2 (signature verification), before L3 (trust tier) is even checked.
+</Accordion>
+
+<Accordion title="What signing algorithm does SAMVAD use?">
+Ed25519 (EdDSA on Curve25519). It was chosen over RSA and ECDSA for:
+- **Speed** — signing and verification are fast
+- **Small keys** — 32-byte public keys, 64-byte signatures
+- **No parameter pitfalls** — unlike ECDSA, there's no nonce-reuse vulnerability
+- **Wide support** — available in every major language and runtime
+
+The signature covers a recursive canonical JSON serialization (lexicographically sorted keys at every depth) of all envelope fields except `signature` itself.
+
+> A future protocol version will migrate to RFC 9421 (HTTP Message Signatures) for IETF-standard interoperability.
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## SDK & Development
+
+<AccordionGroup>
+
+<Accordion title="Does SAMVAD work in the browser?">
+The server-side SDK (`@samvad-protocol/sdk`) requires Node.js 20+ and is not designed for browser use — it spawns a Fastify HTTP server and reads/writes files for key persistence.
+
+Browser clients can *call* SAMVAD agents using `fetch()` directly (constructing signed envelopes manually) or via a thin browser-compatible client. A browser client library is not in the current SDK but is a viable contribution.
+</Accordion>
+
+<Accordion title="Can I use SAMVAD with Python, Go, or other languages?">
+Yes — SAMVAD is a wire protocol, not a TypeScript protocol. Any language that can do HTTPS and Ed25519 can implement a compliant agent. The [JSON Schema definitions](https://github.com/w3rc/samvad/tree/main/schema/v1.1) for all wire types are in the repo for SDK implementers.
+
+A Python SDK with feature parity is the top roadmap item. If you're building an SDK in another language, open an issue — we'd love to list it.
+</Accordion>
+
+<Accordion title="How do I test my agent locally without HTTPS?">
+The SDK does not require HTTPS for local development. Run your agent on `http://localhost:<port>` and point `AgentClient.from()` at the same localhost URL. The L1 security layer (TLS) is absent, but signing, nonce checking, and all other layers still work.
+
+```typescript
+const agent = new Agent({ url: 'http://localhost:3002', ... })
+const client = await AgentClient.from('http://localhost:3002')
+```
+</Accordion>
+
+<Accordion title="Do I need to build before running tests?">
+No. Tests run against `src/` directly via Vitest — no build step required. Just run:
+
+```bash
+npm test -w @samvad-protocol/sdk
+```
+</Accordion>
+
+<Accordion title="Can I run multiple agents in the same process?">
+Yes — each `Agent` instance starts its own Fastify server on its own port with its own keypair. There is no global state.
+
+```typescript
+const agentA = new Agent({ url: 'http://localhost:3001', keysDir: '.samvad/keys-a', ... })
+const agentB = new Agent({ url: 'http://localhost:3002', keysDir: '.samvad/keys-b', ... })
+await agentA.serve({ port: 3001 })
+await agentB.serve({ port: 3002 })
+```
+</Accordion>
+
+<Accordion title="What happens if the receiving agent is down?">
+- **Sync mode** — `client.call()` throws a network error. Implement retry with backoff in your caller.
+- **Async mode** — `client.task()` throws immediately (the 202 response never arrives). If the webhook delivery fails later, `client.taskAndPoll()` will time out.
+- **Stream mode** — `client.stream()` throws when the connection fails.
+
+The protocol does not define a dead-letter queue or guaranteed delivery mechanism. Reliability layers belong above the protocol.
+</Accordion>
+
+<Accordion title="What is the maximum payload size?">
+The protocol does not define a hard limit. In practice, the limit is set by:
+- The `maxLength` you declare on string fields in your skill's Zod schema
+- The receiving agent's HTTP server body size limit (Fastify's default is 1 MB)
+
+For large payloads (code files, documents), use async mode with a `callbackUrl` so the HTTP layer isn't holding a long-running connection.
+</Accordion>
+
+<Accordion title="How do I handle async task timeouts in taskAndPoll?">
+Pass `timeoutMs` to `taskAndPoll()`:
+
+```typescript
+const result = await client.taskAndPoll('long-task', payload, {
+  intervalMs: 1000,   // poll every second
+  timeoutMs: 120_000, // give up after 2 minutes
+})
+```
+
+If `timeoutMs` is exceeded, `taskAndPoll()` throws a `SamvadError` with code `AGENT_UNAVAILABLE`. The task may still be running on the server — poll `GET /agent/task/:taskId` manually if you want to retrieve the result later.
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Deployment
+
+<AccordionGroup>
+
+<Accordion title="Do I need a real domain to run a SAMVAD agent?">
+For production use, yes — SAMVAD's identity model is domain-based. For development and internal use, a local hostname or IP works fine; the SDK doesn't enforce domain validation.
+
+For staging, a free subdomain from services like ngrok, Cloudflare Tunnel, or Railway works — as long as it has a valid TLS certificate.
+</Accordion>
+
+<Accordion title="Can I run SAMVAD behind a reverse proxy (nginx, Caddy)?">
+Yes. Configure your proxy to forward requests to the agent's port. For SSE streaming, add proxy buffering headers — otherwise the proxy will buffer chunks and break streaming:
+
+```nginx
+proxy_buffering off;
+proxy_cache off;
+proxy_set_header Connection '';
+chunked_transfer_encoding on;
+```
+
+The SDK sets `X-Accel-Buffering: no` on stream responses, which disables buffering in nginx automatically when using `proxy_pass`.
+</Accordion>
+
+<Accordion title="Where are keys stored? Can I use a secrets manager?">
+By default, keys are stored in `.samvad/keys/` relative to the process working directory (gitignored). The path is configurable via `keysDir` in the Agent config.
+
+The SDK reads the key file at startup. To use a secrets manager (AWS Secrets Manager, HashiCorp Vault, etc.), retrieve the key material before starting the agent and write it to the `keysDir` path, or extend the SDK's key loading to read from your secrets provider.
+</Accordion>
+
+<Accordion title="What ports does SAMVAD use?">
+Whatever port you configure — there is no reserved port. The agent card declares the full base URL including port (e.g. `https://myagent.com` implicitly uses 443 in production). Internally, the SDK uses Fastify and binds to `0.0.0.0` by default.
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Licensing & Usage
+
+<AccordionGroup>
+
+<Accordion title="Can I use SAMVAD in a commercial product?">
+Yes. SAMVAD is licensed under Apache 2.0, which explicitly permits commercial use, including in closed-source products. You can use, modify, and distribute SAMVAD with no royalties and no obligation to contribute changes back.
+</Accordion>
+
+<Accordion title="Do I need to open-source my agent?">
+No. Apache 2.0 does not require you to open-source your work. You can build a proprietary agent on top of SAMVAD and the SDK without publishing your code.
+
+If you *distribute* a modified version of the SDK itself, you must include the Apache 2.0 license and attribution notices — but building a product that *uses* the SDK as a dependency has no such requirement.
+</Accordion>
+
+<Accordion title="What does the patent grant in Apache 2.0 mean?">
+Every contributor to SAMVAD grants you a perpetual, royalty-free license to any patents they hold that are necessarily infringed by their contribution. This means you can use the code without fear of a contributor suing you for patent infringement on the code they submitted.
+
+This patent grant is the main reason SAMVAD chose Apache 2.0 over MIT — it matters for enterprises and for a protocol that may become widely adopted infrastructure.
+</Accordion>
+
+<Accordion title="Can I build a competing SDK or protocol implementation?">
+Yes, absolutely. The protocol spec is open. Building SDKs in other languages, forks, or compatible implementations is encouraged. The more compliant implementations exist, the stronger the ecosystem.
+</Accordion>
+
+</AccordionGroup>
+
+---
+
+## Contributing
+
+<AccordionGroup>
+
+<Accordion title="How do I report a bug?">
+Open a [GitHub issue](https://github.com/w3rc/samvad/issues). For security vulnerabilities, use [GitHub Security Advisories](https://github.com/w3rc/samvad/security/advisories/new) instead of a public issue.
+</Accordion>
+
+<Accordion title="How do I propose a protocol change?">
+Open a GitHub issue with the label `protocol-change`. Describe the problem, the proposed change, and the backwards-compatibility impact. Allow at least one week for discussion before opening a PR. Changes to the wire format or security model ordering require strong justification.
+</Accordion>
+
+<Accordion title="What are the best ways to contribute right now?">
+The highest-impact contributions at this stage:
+
+- **Python SDK** — the biggest adoption gap
+- **Injection defense** — integration with LLM Guard or Guardrails AI
+- **Protocol conformance tests** — a test suite any SDK can run to prove compliance
+- **Real-world testing** — deploy an agent and report any friction in the protocol or SDK
+- **Documentation improvements** — if something was unclear, a PR fixing it is always welcome
+</Accordion>
+
+</AccordionGroup>
