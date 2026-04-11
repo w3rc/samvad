@@ -59,8 +59,6 @@ export interface MessageEnvelope {
   mode: CommunicationMode
   nonce: string
   timestamp: string
-  kid: string
-  signature: string
   traceId: string
   spanId: string
   parentSpanId?: string

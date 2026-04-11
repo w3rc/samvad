@@ -22,7 +22,7 @@ export function buildAgentCard(opts: BuildCardOptions): AgentCard {
     version: opts.version,
     description: opts.description,
     url: opts.url,
-    protocolVersion: '1.1',
+    protocolVersion: '1.2',
     specializations: opts.specializations,
     models: opts.models,
     skills: opts.skills,

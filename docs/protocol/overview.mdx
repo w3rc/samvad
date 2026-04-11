@@ -1,15 +1,15 @@
 ---
 title: Protocol Overview
-description: SAMVAD v1.1 — language-agnostic wire protocol specification.
+description: SAMVAD v1.2 — language-agnostic wire protocol specification.
 ---
 
 This section is the normative protocol specification. It describes what any compliant implementation must do, independent of programming language.
 
-The reference implementation is [`@samvad-protocol/sdk`](https://www.npmjs.com/package/@samvad-protocol/sdk) (TypeScript). The [full spec](/spec/protocol-v1.1) and [JSON Schema definitions](https://github.com/w3rc/samvad/tree/main/schema/v1.1) are in the repository.
+The reference implementation is [`@samvad-protocol/sdk`](https://www.npmjs.com/package/@samvad-protocol/sdk) (TypeScript). The [full spec](/spec/protocol-v1.2) and [JSON Schema definitions](https://github.com/w3rc/samvad/tree/main/schema/v1.2) are in the repository.
 
 ## Protocol version
 
-Current version: **`1.1`**
+Current version: **`1.2`**
 
 The protocol version is declared in the agent card's `protocolVersion` field and returned in every `/agent/health` response. Receivers may reject requests from agents running incompatible versions.
 

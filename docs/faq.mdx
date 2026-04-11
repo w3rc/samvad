@@ -14,7 +14,7 @@ It defines a wire format (signed JSON envelopes), a standard set of endpoints ev
 </Accordion>
 
 <Accordion title="Is SAMVAD production-ready?">
-SAMVAD is pre-1.0. Protocol version 1.1 is stable and the TypeScript SDK is feature-complete for the core protocol. APIs may change before 1.0.
+SAMVAD is pre-1.0. Protocol version 1.2 is stable and the TypeScript SDK is feature-complete for the core protocol. APIs may change before 1.0.
 
 It is suitable for experimentation, internal tooling, and early-adopter projects. For high-stakes production use, treat it as you would any pre-1.0 open-source dependency: pin your version and monitor the changelog.
 </Accordion>
@@ -112,7 +112,7 @@ Browser clients can *call* SAMVAD agents using `fetch()` directly (constructing 
 </Accordion>
 
 <Accordion title="Can I use SAMVAD with Python, Go, or other languages?">
-Yes — SAMVAD is a wire protocol, not a TypeScript protocol. Any language that can do HTTPS and Ed25519 can implement a compliant agent. The [JSON Schema definitions](https://github.com/w3rc/samvad/tree/main/schema/v1.1) for all wire types are in the repo for SDK implementers.
+Yes — SAMVAD is a wire protocol, not a TypeScript protocol. Any language that can do HTTPS and Ed25519 can implement a compliant agent. The [JSON Schema definitions](https://github.com/w3rc/samvad/tree/main/schema/v1.2) for all wire types are in the repo for SDK implementers.
 
 A Python SDK with feature parity is the top roadmap item. If you're building an SDK in another language, open an issue — we'd love to list it.
 </Accordion>

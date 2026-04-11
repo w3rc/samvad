@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 import Fastify from 'fastify'
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { randomUUID } from 'node:crypto'
 import type { AgentCard, MessageEnvelope, ResponseEnvelope } from './types.js'
 import type { SkillRegistry } from './skill-registry.js'
@@ -8,10 +8,17 @@ import type { TaskStore } from './task-store.js'
 import type { RateLimiter } from './rate-limiter.js'
 import type { NonceStore } from './nonce-store.js'
 import type { Keypair } from './keys.js'
-import { verifyEnvelope } from './signing.js'
+import { verifyRequest } from './signing.js'
 import { scanObjectForInjection } from './injection-scanner.js'
 import { SamvadError, ErrorCode } from './errors.js'
 import { startSSE, sendSSEChunk, sendSSEKeepAlive, endSSE } from './stream.js'
+
+// Extend FastifyRequest to carry the raw body buffer (captured by the content-type parser)
+declare module 'fastify' {
+  interface FastifyRequest {
+    rawBody: Buffer | null
+  }
+}
 
 export interface ServerOptions {
   card: AgentCard
@@ -27,6 +34,22 @@ export interface ServerOptions {
 export function buildServer(opts: ServerOptions): FastifyInstance {
   const app = Fastify({ logger: false })
 
+  // Capture raw body bytes before Fastify's default JSON parsing.
+  // Required for RFC 9421 Content-Digest verification.
+  app.decorateRequest('rawBody', null)
+  app.addContentTypeParser<Buffer>(
+    'application/json',
+    { parseAs: 'buffer' },
+    (req, body, done) => {
+      req.rawBody = body
+      try {
+        done(null, JSON.parse(body.toString('utf-8')))
+      } catch (e) {
+        done(e as Error, null)
+      }
+    },
+  )
+
   // ── GET /.well-known/agent.json ──────────────────────────────────────────
   app.get('/.well-known/agent.json', async (_req, reply) => {
     reply.header('Cache-Control', `public, max-age=${opts.card.cardTTL}`)
@@ -37,7 +60,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   app.get('/agent/health', async () => {
     return {
       status: 'ok',
-      protocolVersion: '1.1',
+      protocolVersion: '1.2',
       agentVersion: opts.card.version,
       uptime: process.uptime(),
     }
@@ -49,8 +72,8 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     return opts.introText
   })
 
-  // ── Shared: verify incoming envelope ────────────────────────────────────
-  async function verifyIncoming(envelope: MessageEnvelope): Promise<void> {
+  // ── Shared: verify incoming envelope (RFC 9421 signature path) ──────────
+  async function verifyIncoming(req: FastifyRequest, envelope: MessageEnvelope): Promise<void> {
     // 1. Nonce + timestamp check (cheap, fast rejection)
     const nonceResult = opts.nonceStore.check(envelope.nonce, envelope.timestamp)
     if (nonceResult === 'expired') throw new SamvadError(ErrorCode.AUTH_FAILED, 'Message timestamp expired')
@@ -59,12 +82,26 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     // 2. Rate limit (protects downstream work)
     opts.rateLimiter.check(envelope.from)
 
-    // 3. Signature verification (expensive crypto)
+    // 3. RFC 9421 signature verification (expensive — only after cheap checks pass)
     const pubKey = opts.knownPeers.get(envelope.from)
     if (!pubKey) {
       throw new SamvadError(ErrorCode.AUTH_FAILED, `Unknown sender: ${envelope.from}`)
     }
-    const valid = await verifyEnvelope(envelope, pubKey)
+    if (!req.rawBody) {
+      throw new SamvadError(ErrorCode.AUTH_FAILED, 'Raw body unavailable for signature verification')
+    }
+    const contentDigest = req.headers['content-digest'] as string | undefined
+    const signatureInput = req.headers['signature-input'] as string | undefined
+    const signature = req.headers['signature'] as string | undefined
+    if (!contentDigest || !signatureInput || !signature) {
+      throw new SamvadError(ErrorCode.AUTH_FAILED, 'Missing RFC 9421 signature headers (Content-Digest, Signature-Input, Signature)')
+    }
+    const valid = await verifyRequest(
+      req.method, req.url!,
+      req.rawBody,
+      { 'content-digest': contentDigest, 'signature-input': signatureInput, 'signature': signature },
+      pubKey,
+    )
     if (!valid) throw new SamvadError(ErrorCode.AUTH_FAILED, 'Invalid message signature')
 
     // 4. Injection scan (after signature — only scan authenticated input)
@@ -76,7 +113,6 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     const skillDef = opts.registry.getSkill(envelope.skill)?.def
     if (skillDef?.trust === 'authenticated') {
       if (!envelope.auth?.token) throw new SamvadError(ErrorCode.AUTH_FAILED, 'Bearer token required')
-      // Actual token validation is the agent owner's responsibility (handled in handler/middleware hooks)
     }
     if (skillDef?.trust === 'trusted-peers') {
       const allowed = skillDef.allowedPeers ?? []
@@ -108,7 +144,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     const env = req.body
     const spanId = randomUUID()
     try {
-      await verifyIncoming(env)
+      await verifyIncoming(req, env)
       const result = await opts.registry.dispatch(env.skill, env.payload, {
         sender: env.from, traceId: env.traceId, spanId, delegationToken: env.delegationToken,
       })
@@ -125,7 +161,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     const env = req.body
     const spanId = randomUUID()
     try {
-      await verifyIncoming(env)
+      await verifyIncoming(req, env)
     } catch (err) {
       reply.status(statusCodeFor(err))
       return errorResponse(err, env.traceId, spanId)
@@ -142,21 +178,16 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
           sender: env.from, traceId: env.traceId, spanId, delegationToken: env.delegationToken,
         })
         opts.taskStore.setDone(task.taskId, result as Record<string, unknown>)
-        // Deliver to callbackUrl if provided
         if (env.callbackUrl) {
           const response: ResponseEnvelope = {
-            traceId: env.traceId,
-            spanId,
-            status: 'ok',
+            traceId: env.traceId, spanId, status: 'ok',
             result: result as Record<string, unknown>,
           }
           fetch(env.callbackUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(response),
-          }).catch(() => {
-            // Fail silently — caller can poll /agent/task/:taskId as fallback
-          })
+          }).catch(() => { /* caller can poll /agent/task/:taskId as fallback */ })
         }
       } catch (err) {
         const error = err instanceof SamvadError ? err.toJSON() : { code: ErrorCode.AGENT_UNAVAILABLE, message: String(err) }
@@ -182,7 +213,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     const env = req.body
     const spanId = randomUUID()
     try {
-      await verifyIncoming(env)
+      await verifyIncoming(req, env)
     } catch (err) {
       reply.status(statusCodeFor(err))
       return errorResponse(err, env.traceId, spanId)

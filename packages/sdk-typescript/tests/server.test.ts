@@ -5,10 +5,11 @@ import { TaskStore } from '../src/task-store.js'
 import { RateLimiter } from '../src/rate-limiter.js'
 import { NonceStore } from '../src/nonce-store.js'
 import { generateKeypair } from '../src/keys.js'
-import { signEnvelope } from '../src/signing.js'
+import { signRequest } from '../src/signing.js'
 import { buildAgentCard } from '../src/card.js'
 import { z } from 'zod'
 import type { FastifyInstance } from 'fastify'
+import type { MessageEnvelope } from '../src/types.js'
 
 async function makeServer() {
   const kp = await generateKeypair('key-1')
@@ -44,6 +45,39 @@ async function makeServer() {
   return { server, kp, card }
 }
 
+/** Build a signed inject call for a message endpoint. */
+async function signedInject(
+  server: FastifyInstance,
+  url: string,
+  body: MessageEnvelope | (MessageEnvelope & { callbackUrl?: string }),
+  kp: Awaited<ReturnType<typeof generateKeypair>>,
+) {
+  const bodyStr = JSON.stringify(body)
+  const bodyBytes = Buffer.from(bodyStr)
+  const sigHeaders = await signRequest('POST', url, bodyBytes, kp)
+  return server.inject({
+    method: 'POST',
+    url,
+    headers: { 'content-type': 'application/json', ...sigHeaders },
+    payload: bodyStr,
+  })
+}
+
+function makeEnvelope(overrides: Partial<MessageEnvelope> = {}): MessageEnvelope {
+  return {
+    from: 'agent://testagent.com',
+    to: 'agent://testagent.com',
+    skill: 'echo',
+    mode: 'sync',
+    nonce: Math.random().toString(36),
+    timestamp: new Date().toISOString(),
+    traceId: 'trace-1',
+    spanId: 'span-1',
+    payload: { text: 'hello' },
+    ...overrides,
+  }
+}
+
 describe('server endpoints', () => {
   let server: FastifyInstance
   let kp: Awaited<ReturnType<typeof generateKeypair>>
@@ -60,7 +94,7 @@ describe('server endpoints', () => {
     const res = await server.inject({ method: 'GET', url: '/.well-known/agent.json' })
     expect(res.statusCode).toBe(200)
     const body = JSON.parse(res.body)
-    expect(body.protocolVersion).toBe('1.1')
+    expect(body.protocolVersion).toBe('1.2')
     expect(body.skills).toHaveLength(1)
   })
 
@@ -78,39 +112,43 @@ describe('server endpoints', () => {
   })
 
   it('POST /agent/message dispatches echo skill', async () => {
-    const envelope = await signEnvelope({
-      from: 'agent://testagent.com', to: 'agent://testagent.com',
-      skill: 'echo', mode: 'sync',
-      nonce: Math.random().toString(36), timestamp: new Date().toISOString(),
-      kid: 'key-1', signature: '', traceId: 'trace-1', spanId: 'span-1',
-      payload: { text: 'hello' },
-    }, kp)
-
-    const res = await server.inject({
-      method: 'POST', url: '/agent/message',
-      headers: { 'content-type': 'application/json' },
-      payload: envelope,
-    })
+    const envelope = makeEnvelope({ payload: { text: 'hello' } })
+    const res = await signedInject(server, '/agent/message', envelope, kp)
     expect(res.statusCode).toBe(200)
     const body = JSON.parse(res.body)
     expect(body.status).toBe('ok')
     expect(body.result).toEqual({ echo: 'hello' })
   })
 
-  it('POST /agent/task returns 202 with taskId', async () => {
-    const envelope = await signEnvelope({
-      from: 'agent://testagent.com', to: 'agent://testagent.com',
-      skill: 'echo', mode: 'async',
-      nonce: Math.random().toString(36), timestamp: new Date().toISOString(),
-      kid: 'key-1', signature: '', traceId: 'trace-1', spanId: 'span-2',
-      payload: { text: 'async hello' },
-    }, kp)
-
+  it('POST /agent/message rejects missing signature headers', async () => {
+    const envelope = makeEnvelope()
     const res = await server.inject({
-      method: 'POST', url: '/agent/task',
+      method: 'POST', url: '/agent/message',
       headers: { 'content-type': 'application/json' },
-      payload: envelope,
+      payload: JSON.stringify(envelope),
     })
+    expect(res.statusCode).toBe(401)
+  })
+
+  it('POST /agent/message rejects tampered body', async () => {
+    const envelope = makeEnvelope({ payload: { text: 'hello' } })
+    const bodyStr = JSON.stringify(envelope)
+    const bodyBytes = Buffer.from(bodyStr)
+    const sigHeaders = await signRequest('POST', '/agent/message', bodyBytes, kp)
+
+    // Send a different body but keep the original signature headers
+    const tamperedEnvelope = makeEnvelope({ payload: { text: 'tampered' } })
+    const res = await server.inject({
+      method: 'POST', url: '/agent/message',
+      headers: { 'content-type': 'application/json', ...sigHeaders },
+      payload: JSON.stringify(tamperedEnvelope),
+    })
+    expect(res.statusCode).toBe(401)
+  })
+
+  it('POST /agent/task returns 202 with taskId', async () => {
+    const envelope = makeEnvelope({ mode: 'async', spanId: 'span-2', payload: { text: 'async hello' } })
+    const res = await signedInject(server, '/agent/task', envelope, kp)
     expect(res.statusCode).toBe(202)
     const body = JSON.parse(res.body)
     expect(body.taskId).toBeTruthy()
@@ -118,17 +156,10 @@ describe('server endpoints', () => {
   })
 
   it('GET /agent/task/:taskId returns task status', async () => {
-    const envelope = await signEnvelope({
-      from: 'agent://testagent.com', to: 'agent://testagent.com',
-      skill: 'echo', mode: 'async',
-      nonce: Math.random().toString(36), timestamp: new Date().toISOString(),
-      kid: 'key-1', signature: '', traceId: 'trace-1', spanId: 'span-3',
-      payload: { text: 'poll me' },
-    }, kp)
-    const taskRes = await server.inject({ method: 'POST', url: '/agent/task', headers: { 'content-type': 'application/json' }, payload: envelope })
+    const envelope = makeEnvelope({ mode: 'async', spanId: 'span-3', payload: { text: 'poll me' } })
+    const taskRes = await signedInject(server, '/agent/task', envelope, kp)
     const { taskId } = JSON.parse(taskRes.body)
 
-    // Give the async handler a moment to complete
     await new Promise(r => setTimeout(r, 50))
     const pollRes = await server.inject({ method: 'GET', url: `/agent/task/${taskId}` })
     expect(pollRes.statusCode).toBe(200)

@@ -20,7 +20,7 @@ The card is the single source of truth for the agent's identity, capabilities, p
   "version": "1.2.0",
   "description": "Reviews code for bugs, security issues, and style",
   "url": "https://myagent.com",
-  "protocolVersion": "1.1",
+  "protocolVersion": "1.2",
   "specializations": ["code-review", "security-audit"],
   "models": [
     { "provider": "anthropic", "model": "claude-opus-4-6" }
@@ -90,4 +90,4 @@ Receivers re-fetch the card every `cardTTL` seconds. Deactivating a key propagat
 
 ## JSON Schema
 
-The full JSON Schema for the agent card is at [`schema/v1.1/agent-card.schema.json`](https://github.com/w3rc/samvad/blob/main/schema/v1.1/agent-card.schema.json).
+The full JSON Schema for the agent card is at [`schema/v1.2/agent-card.schema.json`](https://github.com/w3rc/samvad/blob/main/schema/v1.2/agent-card.schema.json).

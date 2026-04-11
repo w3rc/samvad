@@ -29,7 +29,7 @@ describe('buildAgentCard', () => {
     })
 
     expect(card.id).toBe('agent://testagent.com')
-    expect(card.protocolVersion).toBe('1.1')
+    expect(card.protocolVersion).toBe('1.2')
     expect(card.skills).toHaveLength(1)
     expect(card.endpoints.message).toBe('/agent/message')
     expect(card.endpoints.health).toBe('/agent/health')

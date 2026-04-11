@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/w3rc/samvad/schema/v1.2/request-envelope.schema.json",
+  "title": "SAMVAD Request Envelope",
+  "description": "Message envelope sent by the caller to POST /agent/message, POST /agent/task, or POST /agent/stream. Authentication is carried in HTTP headers (Content-Digest, Signature-Input, Signature) per RFC 9421 — not in this body.",
+  "type": "object",
+  "required": ["from", "to", "skill", "mode", "nonce", "timestamp", "traceId", "spanId"],
+  "additionalProperties": false,
+  "properties": {
+    "from": {
+      "type": "string",
+      "pattern": "^agent://",
+      "description": "agent:// identity of the sender.",
+      "examples": ["agent://sender.com"]
+    },
+    "to": {
+      "type": "string",
+      "pattern": "^agent://",
+      "description": "agent:// identity of the intended receiver.",
+      "examples": ["agent://receiver.com"]
+    },
+    "skill": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "Skill ID to invoke on the receiving agent.",
+      "examples": ["review-code"]
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["sync", "async", "stream"],
+      "description": "Communication mode. Must match one of the skill's declared modes."
+    },
+    "nonce": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 64,
+      "description": "Unique random value for replay prevention. Receivers reject any nonce seen within the last 5 minutes."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 UTC timestamp. Receivers reject messages older than 5 minutes."
+    },
+    "traceId": {
+      "type": "string",
+      "description": "Root correlation ID for distributed tracing (OpenTelemetry-compatible). Propagated unchanged across all hops in a multi-agent call."
+    },
+    "spanId": {
+      "type": "string",
+      "description": "Unique identifier for this specific hop."
+    },
+    "parentSpanId": {
+      "type": ["string", "null"],
+      "description": "spanId of the caller's own span. Null for the root hop."
+    },
+    "delegationToken": {
+      "type": ["string", "null"],
+      "description": "EdDSA-signed JWT (RFC 8693) granting this agent permission to act on behalf of the token issuer. Null when not delegating."
+    },
+    "auth": {
+      "type": ["object", "null"],
+      "description": "Authentication credentials. Required for 'authenticated' skills; omit or null for 'public' and 'trusted-peers'.",
+      "properties": {
+        "scheme": {
+          "type": "string",
+          "enum": ["bearer", "none"]
+        },
+        "token": {
+          "type": "string",
+          "description": "Bearer token value. Present when scheme is 'bearer'."
+        }
+      }
+    },
+    "callbackUrl": {
+      "type": ["string", "null"],
+      "format": "uri",
+      "description": "For async mode only. URL the receiver POSTs the result to when the task completes. If omitted, the caller must poll."
+    },
+    "payload": {
+      "type": ["object", "null"],
+      "description": "Skill input. Must conform to the skill's declared inputSchema."
+    }
+  }
+}

@@ -1,56 +1,91 @@
 import { describe, it, expect } from 'vitest'
-import { signEnvelope, verifyEnvelope, canonicalise } from '../src/signing.js'
+import { signRequest, verifyRequest, computeContentDigest, parseKeyId } from '../src/signing.js'
 import { generateKeypair } from '../src/keys.js'
-import type { MessageEnvelope } from '../src/types.js'
 
-function makeEnvelope(overrides: Partial<MessageEnvelope> = {}): MessageEnvelope {
-  return {
-    from: 'agent://sender.com',
-    to: 'agent://receiver.com',
-    skill: 'test-skill',
-    mode: 'sync',
-    nonce: 'abc123',
-    timestamp: new Date().toISOString(),
-    kid: 'key-1',
-    signature: '',
-    traceId: 'trace-1',
-    spanId: 'span-1',
-    payload: { input: 'hello' },
-    ...overrides,
-  }
+const METHOD = 'POST'
+const PATH = '/agent/message'
+
+function toBytes(s: string): Uint8Array {
+  return new TextEncoder().encode(s)
 }
 
-describe('signing', () => {
-  it('signs an envelope and verifies it', async () => {
+describe('computeContentDigest', () => {
+  it('produces a sha-256 Content-Digest header value', () => {
+    const digest = computeContentDigest(toBytes('hello'))
+    expect(digest).toMatch(/^sha-256=:[A-Za-z0-9+/]+=*:$/)
+  })
+
+  it('is deterministic for the same input', () => {
+    const body = toBytes('{"key":"value"}')
+    expect(computeContentDigest(body)).toBe(computeContentDigest(body))
+  })
+
+  it('differs for different inputs', () => {
+    expect(computeContentDigest(toBytes('a'))).not.toBe(computeContentDigest(toBytes('b')))
+  })
+})
+
+describe('parseKeyId', () => {
+  it('extracts keyid from Signature-Input value', () => {
+    const sigInput = 'sig1=("@method" "@path" "content-digest");keyid="key-1";alg="ed25519"'
+    expect(parseKeyId(sigInput)).toBe('key-1')
+  })
+
+  it('returns null when keyid is missing', () => {
+    expect(parseKeyId('sig1=("@method");alg="ed25519"')).toBeNull()
+  })
+})
+
+describe('signRequest / verifyRequest', () => {
+  it('signs and verifies successfully', async () => {
     const kp = await generateKeypair('key-1')
-    const env = makeEnvelope()
-    const signed = await signEnvelope(env, kp)
-    expect(signed.signature).not.toBe('')
-    const ok = await verifyEnvelope(signed, kp.publicKey)
+    const body = toBytes('{"from":"agent://a"}')
+    const headers = await signRequest(METHOD, PATH, body, kp)
+    expect(headers['content-digest']).toMatch(/^sha-256=:/)
+    expect(headers['signature-input']).toMatch(/^sig1=\(/)
+    expect(headers['signature']).toMatch(/^sig1=:/)
+    const ok = await verifyRequest(METHOD, PATH, body, headers, kp.publicKey)
     expect(ok).toBe(true)
   })
 
-  it('fails verification when payload is tampered', async () => {
+  it('fails when body is tampered after signing', async () => {
     const kp = await generateKeypair('key-1')
-    const env = makeEnvelope()
-    const signed = await signEnvelope(env, kp)
-    signed.payload = { input: 'tampered' }
-    const ok = await verifyEnvelope(signed, kp.publicKey)
+    const originalBody = toBytes('{"from":"agent://a"}')
+    const headers = await signRequest(METHOD, PATH, originalBody, kp)
+    const tamperedBody = toBytes('{"from":"agent://evil"}')
+    const ok = await verifyRequest(METHOD, PATH, tamperedBody, headers, kp.publicKey)
     expect(ok).toBe(false)
   })
 
-  it('fails verification when signature is wrong key', async () => {
+  it('fails when verified with the wrong public key', async () => {
     const kp1 = await generateKeypair('key-1')
     const kp2 = await generateKeypair('key-2')
-    const env = makeEnvelope()
-    const signed = await signEnvelope(env, kp1)
-    const ok = await verifyEnvelope(signed, kp2.publicKey)
+    const body = toBytes('{"from":"agent://a"}')
+    const headers = await signRequest(METHOD, PATH, body, kp1)
+    const ok = await verifyRequest(METHOD, PATH, body, headers, kp2.publicKey)
     expect(ok).toBe(false)
   })
 
-  it('canonicalise produces deterministic output', () => {
-    const a = canonicalise({ b: 2, a: 1 })
-    const b = canonicalise({ a: 1, b: 2 })
-    expect(a).toBe(b)
+  it('fails when the path differs', async () => {
+    const kp = await generateKeypair('key-1')
+    const body = toBytes('{"from":"agent://a"}')
+    const headers = await signRequest(METHOD, PATH, body, kp)
+    const ok = await verifyRequest(METHOD, '/agent/task', body, headers, kp.publicKey)
+    expect(ok).toBe(false)
+  })
+
+  it('fails when the method differs', async () => {
+    const kp = await generateKeypair('key-1')
+    const body = toBytes('{"from":"agent://a"}')
+    const headers = await signRequest(METHOD, PATH, body, kp)
+    const ok = await verifyRequest('GET', PATH, body, headers, kp.publicKey)
+    expect(ok).toBe(false)
+  })
+
+  it('includes keyid in Signature-Input', async () => {
+    const kp = await generateKeypair('my-key-id')
+    const headers = await signRequest(METHOD, PATH, toBytes('{}'), kp)
+    expect(headers['signature-input']).toContain('keyid="my-key-id"')
+    expect(parseKeyId(headers['signature-input'])).toBe('my-key-id')
   })
 })

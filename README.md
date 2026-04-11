@@ -7,12 +7,12 @@
 
 [![npm](https://img.shields.io/npm/v/@samvad-protocol/sdk)](https://www.npmjs.com/package/@samvad-protocol/sdk)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](./LICENSE)
-[![Spec](https://img.shields.io/badge/spec-v1.1-green)](./spec/protocol-v1.1.md)
+[![Spec](https://img.shields.io/badge/spec-v1.2-green)](./spec/protocol-v1.2.md)
 [![Docs](https://img.shields.io/badge/docs-mintlify-brightgreen)](https://abcd-f0394a8a.mintlify.app)
 
 SAMVAD is an open, developer-first protocol for internet-scale agent-to-agent discovery and communication. Any developer can publish a protocol-compliant agent in minutes, and any other agent on the internet can discover it, verify its identity, and call its skills — with no central registry, no accounts, and no platform lock-in.
 
-> **Status:** Pre-1.0. Protocol version `1.1`. The spec is stable; the TypeScript SDK is feature-complete for the core protocol and under active development. APIs may change before 1.0.
+> **Status:** Pre-1.0. Protocol version `1.2`. The spec is stable; the TypeScript SDK is feature-complete for the core protocol and under active development. APIs may change before 1.0.
 
 ---
 
@@ -166,7 +166,7 @@ Every compliant agent hosts its machine-readable identity at `/.well-known/agent
   "version": "1.2.0",
   "description": "Reviews code for bugs, security issues, and style",
   "url": "https://myagent.com",
-  "protocolVersion": "1.1",
+  "protocolVersion": "1.2",
   "specializations": ["code-review", "security-audit"],
   "models": [{ "provider": "anthropic", "model": "claude-opus-4-6" }],
   "skills": [
@@ -535,7 +535,7 @@ The SDK is ESM-only (`"type": "module"`, `module: NodeNext`). Internal imports u
 
 See [CLAUDE.md](./CLAUDE.md) for a deeper dive into the architecture, the exact order of the request-verification pipeline, and the gotchas worth knowing before changing core modules.
 
-The full protocol specification lives in [`spec/protocol-v1.1.md`](./spec/protocol-v1.1.md). JSON Schema definitions for the wire format (agent card, request/response envelopes, task status) are in [`schema/v1.1/`](./schema/v1.1/).
+The full protocol specification lives in [`spec/protocol-v1.2.md`](./spec/protocol-v1.2.md). JSON Schema definitions for the wire format (agent card, request/response envelopes, task status) are in [`schema/v1.2/`](./schema/v1.2/).
 
 ---
 

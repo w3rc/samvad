@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { AgentCard, MessageEnvelope, ResponseEnvelope, TaskRecord } from './types.js'
 import { generateKeypair, loadKeypair, saveKeypair, type Keypair } from './keys.js'
-import { signEnvelope } from './signing.js'
+import { signRequest } from './signing.js'
 import { SamvadError, ErrorCode, type ErrorCodeType } from './errors.js'
 
 export interface AgentClientOptions {
@@ -61,51 +61,53 @@ export class AgentClient {
     }
   }
 
-  private async buildEnvelope(
+  private buildBody(
     skill: string,
     mode: 'sync' | 'async' | 'stream',
     payload: Record<string, unknown>,
-  ): Promise<MessageEnvelope> {
+  ): MessageEnvelope {
     this.ensureConnected()
-    const envelope: MessageEnvelope = {
+    return {
       from: this.agentId,
       to: this.card!.id,
       skill, mode,
       nonce: randomUUID(),
       timestamp: new Date().toISOString(),
-      kid: this.keypair.kid,
-      signature: '',
       traceId: randomUUID(),
       spanId: randomUUID(),
       payload,
     }
-    return signEnvelope(envelope, this.keypair)
+  }
+
+  /** Sign and send a POST request with RFC 9421 signature headers. */
+  private async signedPost(url: string, body: object): Promise<Response> {
+    const bodyStr = JSON.stringify(body)
+    const bodyBytes = Buffer.from(bodyStr)
+    const { pathname } = new URL(url)
+    const sigHeaders = await signRequest('POST', pathname, bodyBytes, this.keypair)
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...sigHeaders },
+      body: bodyStr,
+    })
   }
 
   async call(skill: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
     this.ensureConnected()
-    const envelope = await this.buildEnvelope(skill, 'sync', payload)
-    const res = await fetch(`${this.baseUrl}/agent/message`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(envelope),
-    })
-    const body = await res.json() as ResponseEnvelope
-    if (body.status === 'error') {
-      throw new SamvadError(body.error!.code as ErrorCodeType, body.error!.message)
+    const body = this.buildBody(skill, 'sync', payload)
+    const res = await this.signedPost(`${this.baseUrl}/agent/message`, body)
+    const respBody = await res.json() as ResponseEnvelope
+    if (respBody.status === 'error') {
+      throw new SamvadError(respBody.error!.code as ErrorCodeType, respBody.error!.message)
     }
-    return body.result!
+    return respBody.result!
   }
 
   async task(skill: string, payload: Record<string, unknown>, callbackUrl?: string): Promise<string> {
     this.ensureConnected()
-    const envelope = await this.buildEnvelope(skill, 'async', payload)
-    const body = callbackUrl ? { ...envelope, callbackUrl } : envelope
-    const res = await fetch(`${this.baseUrl}/agent/task`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+    const body: Record<string, unknown> = { ...this.buildBody(skill, 'async', payload) }
+    if (callbackUrl) body.callbackUrl = callbackUrl
+    const res = await this.signedPost(`${this.baseUrl}/agent/task`, body)
     const result = await res.json() as { taskId: string; status: string }
     return result.taskId
   }
@@ -135,11 +137,16 @@ export class AgentClient {
 
   async *stream(skill: string, payload: Record<string, unknown>): AsyncGenerator<unknown> {
     this.ensureConnected()
-    const envelope = await this.buildEnvelope(skill, 'stream', payload)
-    const res = await fetch(`${this.baseUrl}/agent/stream`, {
+    const body = this.buildBody(skill, 'stream', payload)
+    const url = `${this.baseUrl}/agent/stream`
+    const bodyStr = JSON.stringify(body)
+    const bodyBytes = Buffer.from(bodyStr)
+    const { pathname } = new URL(url)
+    const sigHeaders = await signRequest('POST', pathname, bodyBytes, this.keypair)
+    const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(envelope),
+      headers: { 'content-type': 'application/json', ...sigHeaders },
+      body: bodyStr,
     })
     if (!res.body) throw new Error('No response body for stream')
     const reader = res.body.getReader()

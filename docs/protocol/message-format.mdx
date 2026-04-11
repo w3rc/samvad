@@ -3,9 +3,11 @@ title: Message Format
 description: The signed request and response envelope shared by all SAMVAD communication modes.
 ---
 
-All three communication modes — sync, async, and stream — use the same signed envelope. The format never changes based on delivery mechanism; only the endpoint and response behavior differ.
+All three communication modes — sync, async, and stream — use the same envelope. The format never changes based on delivery mechanism; only the endpoint and response behavior differ.
 
-## Request envelope
+## Request envelope (body)
+
+The JSON body carries routing and payload fields. The signature is in HTTP headers — not the body.
 
 ```json
 {
@@ -15,8 +17,6 @@ All three communication modes — sync, async, and stream — use the same signe
   "mode": "sync",
   "nonce": "a1b2c3d4e5f6",
   "timestamp": "2026-04-11T10:00:00Z",
-  "kid": "key-2",
-  "signature": "base64-Ed25519-signature",
   "traceId": "root-correlation-uuid",
   "spanId": "this-hop-uuid",
   "parentSpanId": "caller-span-uuid",
@@ -37,8 +37,6 @@ All three communication modes — sync, async, and stream — use the same signe
 | `mode` | Yes | `sync`, `async`, or `stream` |
 | `nonce` | Yes | Unique random value; receivers reject duplicates within 5 minutes |
 | `timestamp` | Yes | ISO 8601 UTC; receivers reject messages older than 5 minutes |
-| `kid` | Yes | Key ID from the sender's agent card |
-| `signature` | Yes | Ed25519 signature (see below) |
 | `traceId` | Yes | Root correlation ID for distributed tracing |
 | `spanId` | Yes | This hop's unique ID |
 | `parentSpanId` | No | Parent span ID; null for root hops |
@@ -47,19 +45,28 @@ All three communication modes — sync, async, and stream — use the same signe
 | `callbackUrl` | No | Async mode only — URL for webhook delivery |
 | `payload` | No | Skill input; must conform to `inputSchema` |
 
-## Signature computation
+## Signature (RFC 9421 HTTP Message Signatures)
 
-The signature covers a **recursive canonical JSON** serialization of all fields except `signature`:
+Authentication uses **RFC 9421** — three standard HTTP headers on every POST request:
 
-1. Recursively sort object keys lexicographically at every depth
-2. No insignificant whitespace
-3. Sign the resulting UTF-8 bytes with Ed25519
-4. Base64-encode the 64-byte signature
+```
+Content-Digest: sha-256=:base64-sha256-of-body:
+Signature-Input: sig1=("@method" "@path" "content-digest");keyid="key-2";alg="ed25519";created=1744371600
+Signature: sig1=:base64-ed25519-signature:
+```
 
-Any tampering — including field reordering or body substitution — invalidates the signature.
+**What's signed:** `@method`, `@path`, and `content-digest` — so the receiver can verify both which endpoint was targeted and that the body hasn't been tampered with.
+
+**Signing procedure:**
+1. Serialize the body to UTF-8 bytes
+2. Compute `sha-256` of the bytes → `Content-Digest`
+3. Build the RFC 9421 signature base (method + path + content-digest + params), sign with Ed25519
+4. Send all three headers with the request
+
+The `keyid` in `Signature-Input` references the `kid` in the sender's agent card — enabling key rotation without changing the protocol.
 
 <Note>
-A future protocol version will migrate to RFC 9421 (HTTP Message Signatures) for interoperability with IETF-standard tooling. The current canonical JSON format is stable for v1.1.
+The SDK handles all of this automatically. You never construct or verify these headers manually.
 </Note>
 
 ## Response envelope
@@ -92,5 +99,5 @@ On error:
 
 ## JSON Schema
 
-- [`schema/v1.1/request-envelope.schema.json`](https://github.com/w3rc/samvad/blob/main/schema/v1.1/request-envelope.schema.json)
-- [`schema/v1.1/response-envelope.schema.json`](https://github.com/w3rc/samvad/blob/main/schema/v1.1/response-envelope.schema.json)
+- [`schema/v1.2/request-envelope.schema.json`](https://github.com/w3rc/samvad/blob/main/schema/v1.2/request-envelope.schema.json)
+- [`schema/v1.2/response-envelope.schema.json`](https://github.com/w3rc/samvad/blob/main/schema/v1.2/response-envelope.schema.json)
