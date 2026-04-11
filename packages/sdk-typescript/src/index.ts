@@ -21,4 +21,5 @@ export type {
   SkillContext,
   PublicKey,
   RateLimit,
+  InjectionClassifier,
 } from './types.js'

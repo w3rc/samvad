@@ -99,3 +99,9 @@ export interface RegisteredSkill {
   inputZod: ZodTypeAny
   handler: (input: unknown, ctx: SkillContext) => Promise<unknown>
 }
+
+// Developer-supplied async classifier for LLM-based injection detection.
+// Return true = injection detected → request rejected with INJECTION_DETECTED.
+// Return false = clean → request proceeds.
+// Throw = fail open (warning logged, request proceeds).
+export type InjectionClassifier = (payload: Record<string, unknown>) => boolean | Promise<boolean>
