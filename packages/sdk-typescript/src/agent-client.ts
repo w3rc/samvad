@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'

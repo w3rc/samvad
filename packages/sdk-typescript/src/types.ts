@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import type { ZodTypeAny } from 'zod'
 
 export type TrustTier = 'public' | 'authenticated' | 'trusted-peers'

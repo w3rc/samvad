@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import type { FastifyReply } from 'fastify'
 
 export function startSSE(reply: FastifyReply): void {

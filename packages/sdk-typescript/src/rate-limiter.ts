@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { SamvadError, ErrorCode } from './errors.js'
 import type { RateLimit } from './types.js'
 

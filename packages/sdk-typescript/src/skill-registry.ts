@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { zodToJsonSchema } from 'zod-to-json-schema'
 import type { ZodTypeAny } from 'zod'
 import { SamvadError, ErrorCode } from './errors.js'

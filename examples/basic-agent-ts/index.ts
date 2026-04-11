@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { Agent } from '@samvad-protocol/sdk'
 import { z } from 'zod'
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 export const ErrorCode = {
   AUTH_FAILED: 'AUTH_FAILED',
   SKILL_NOT_FOUND: 'SKILL_NOT_FOUND',

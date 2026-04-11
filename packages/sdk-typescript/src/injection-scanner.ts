@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 // Community-maintained injection pattern list
 // Note: regex-based detection is a first-pass only. OWASP 2025 research shows
 // adaptive attacks bypass regex >90% of the time. For high-trust skills,

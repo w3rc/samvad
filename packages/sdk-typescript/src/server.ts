@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import Fastify from 'fastify'
 import type { FastifyInstance } from 'fastify'
 import { randomUUID } from 'node:crypto'

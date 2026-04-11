@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import { SignJWT, jwtVerify } from 'jose'
 import * as ed from '@noble/ed25519'
 import { SamvadError, ErrorCode } from './errors.js'

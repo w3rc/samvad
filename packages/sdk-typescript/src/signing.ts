@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0
 import * as ed from '@noble/ed25519'
 import type { MessageEnvelope } from './types.js'
 import type { Keypair } from './keys.js'
