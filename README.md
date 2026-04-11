@@ -7,6 +7,7 @@
 
 [![npm](https://img.shields.io/npm/v/@samvad-protocol/sdk)](https://www.npmjs.com/package/@samvad-protocol/sdk)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](./LICENSE)
+[![Spec](https://img.shields.io/badge/spec-v1.1-green)](./spec/protocol-v1.1.md)
 
 SAMVAD is an open, developer-first protocol for internet-scale agent-to-agent discovery and communication. Any developer can publish a protocol-compliant agent in minutes, and any other agent on the internet can discover it, verify its identity, and call its skills — with no central registry, no accounts, and no platform lock-in.
 
@@ -532,6 +533,8 @@ npm start -w basic-agent-ts
 The SDK is ESM-only (`"type": "module"`, `module: NodeNext`). Internal imports use the `.js` extension even when importing `.ts` sources — `tsc` emits to `dist/`, but Vitest runs tests against `src/` directly, so no build step is required before `npm test`.
 
 See [CLAUDE.md](./CLAUDE.md) for a deeper dive into the architecture, the exact order of the request-verification pipeline, and the gotchas worth knowing before changing core modules.
+
+The full protocol specification lives in [`spec/protocol-v1.1.md`](./spec/protocol-v1.1.md). JSON Schema definitions for the wire format (agent card, request/response envelopes, task status) are in [`schema/v1.1/`](./schema/v1.1/).
 
 ---
 

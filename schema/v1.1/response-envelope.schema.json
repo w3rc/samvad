@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/w3rc/samvad/schema/v1.1/response-envelope.schema.json",
+  "title": "SAMVAD Response Envelope",
+  "description": "Response returned by POST /agent/message (sync) or delivered via webhook/polling for async tasks.",
+  "type": "object",
+  "required": ["traceId", "spanId", "status"],
+  "additionalProperties": false,
+  "properties": {
+    "traceId": {
+      "type": "string",
+      "description": "Root correlation ID propagated from the request."
+    },
+    "spanId": {
+      "type": "string",
+      "description": "Unique identifier for the responder's span."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["ok", "error"],
+      "description": "'ok' on success, 'error' on any protocol or handler failure."
+    },
+    "result": {
+      "description": "Skill output on success. Must conform to the skill's declared outputSchema. Absent on error.",
+      "type": "object"
+    },
+    "error": {
+      "type": "object",
+      "description": "Error details. Present only when status is 'error'.",
+      "required": ["code", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "AUTH_FAILED",
+            "REPLAY_DETECTED",
+            "SKILL_NOT_FOUND",
+            "SCHEMA_INVALID",
+            "INJECTION_DETECTED",
+            "DELEGATION_EXCEEDED",
+            "RATE_LIMITED",
+            "TOKEN_BUDGET_EXCEEDED",
+            "AGENT_UNAVAILABLE"
+          ],
+          "description": "Machine-readable error code."
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable error description."
+        }
+      }
+    }
+  }
+}
