@@ -1,0 +1,86 @@
+---
+title: Access Control
+description: Public services, internal orchestration, and commercial paywalls using SAMVAD trust tiers.
+---
+
+The protocol defines one authentication hook and gets out of your way. Billing, key issuance, and subscription logic live in your product — not in SAMVAD.
+
+## Public service
+
+Open to anyone with a valid signature. The agent owner absorbs all LLM costs. Use `tokensPerSenderPerDay` to prevent any single caller from exhausting your budget.
+
+```typescript
+agent.skill('summarize', {
+  trust: 'public',
+  // ...
+})
+```
+
+```json
+// In agent card:
+"rateLimit": {
+  "requestsPerMinute": 60,
+  "requestsPerSender": 10,
+  "tokensPerSenderPerDay": 50000
+}
+```
+
+When a sender exhausts their daily budget, the agent returns `TOKEN_BUDGET_EXCEEDED` with a `Retry-After` header pointing to UTC midnight reset.
+
+## Internal / multi-agent orchestration
+
+Restrict access to a specific set of internal agent identities. Only the listed `agent://` IDs can call the skill, verified by signature.
+
+```typescript
+agent.skill('process-order', {
+  trust: 'trusted-peers',
+  allowedPeers: [
+    'agent://billing.internal',
+    'agent://inventory.internal',
+  ],
+  // ...
+})
+```
+
+Use `AgentClient.prepare()` on each internal agent to get its `agentId` and `publicKey`, then register them with `agent.trustPeer()` before starting the server.
+
+## Commercial / paywalled
+
+Require a Bearer token for access. You issue tokens from your own paywall or subscription flow — the protocol just enforces their presence. The issuance, validation, and revocation logic is entirely yours.
+
+```typescript
+agent.skill('generate-report', {
+  trust: 'authenticated',
+  // ...
+})
+```
+
+Callers include the token in every request:
+
+```json
+{
+  "auth": { "scheme": "bearer", "token": "your-issued-token" },
+  "payload": { "…": "…" }
+}
+```
+
+The SDK checks that the `auth.token` field is non-empty for `authenticated` skills. What it contains and how you validate it in your handler is up to you.
+
+## Mixing tiers
+
+An agent can expose skills at different tiers — public diagnostics, authenticated core functionality, and trusted-peer internal endpoints:
+
+```typescript
+agent.skill('health-check', { trust: 'public', ... })
+agent.skill('analyze', { trust: 'authenticated', ... })
+agent.skill('admin-reset', { trust: 'trusted-peers', allowedPeers: ['agent://ops.internal'], ... })
+```
+
+## What the protocol doesn't do
+
+- Issue, rotate, or revoke API keys
+- Implement subscriptions or usage-based billing
+- Validate what's *inside* a Bearer token (that's your handler's job)
+- Manage payment between agents
+
+The protocol provides one primitive per tier. Everything built on top of those primitives is your product.

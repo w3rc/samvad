@@ -1,0 +1,73 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "SAMVAD",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#6366f1",
+    "light": "#818cf8",
+    "dark": "#4f46e5",
+    "anchors": {
+      "from": "#6366f1",
+      "to": "#4f46e5"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "GitHub",
+      "url": "https://github.com/w3rc/samvad"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "npm",
+    "url": "https://www.npmjs.com/package/@samvad-protocol/sdk"
+  },
+  "tabs": [
+    {
+      "name": "Protocol Spec",
+      "url": "protocol"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Get Started",
+      "pages": [
+        "introduction",
+        "quickstart"
+      ]
+    },
+    {
+      "group": "TypeScript SDK",
+      "pages": [
+        "sdk/overview",
+        "sdk/building-agents",
+        "sdk/calling-agents",
+        "sdk/delegation"
+      ]
+    },
+    {
+      "group": "Security",
+      "pages": [
+        "security/model",
+        "security/access-control"
+      ]
+    },
+    {
+      "group": "Protocol Spec",
+      "pages": [
+        "protocol/overview",
+        "protocol/agent-card",
+        "protocol/message-format",
+        "protocol/communication-modes",
+        "protocol/error-codes",
+        "protocol/discovery"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "github": "https://github.com/w3rc/samvad"
+  }
+}

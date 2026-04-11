@@ -1,0 +1,96 @@
+---
+title: Calling Agents
+description: How to use AgentClient to call remote SAMVAD agents.
+---
+
+## Connect to an agent
+
+```typescript
+import { AgentClient } from '@samvad-protocol/sdk'
+
+// Fetches the remote agent card and builds a typed client
+const client = await AgentClient.from('https://other-agent.com')
+```
+
+`from()` fetches `/.well-known/agent.json`, loads the public key, and generates a local Ed25519 keypair stored in `.samvad/client-keys/` (created if absent).
+
+## Sync call
+
+```typescript
+const result = await client.call('review-code', {
+  code: 'function foo() {}',
+  language: 'typescript',
+})
+// result is the skill's typed output
+```
+
+`call()` builds a signed envelope, sends it to `POST /agent/message`, and returns the parsed result. Throws `SamvadError` on protocol errors.
+
+## Async task
+
+```typescript
+// Fire-and-forget with webhook — agent POSTs result to your callback URL
+const taskId = await client.task(
+  'review-code',
+  { code: '...' },
+  'https://my-agent.com/agent/message'
+)
+
+// No webhook — SDK polls automatically with configurable interval/timeout
+const result = await client.taskAndPoll('review-code', { code: '...' }, {
+  intervalMs: 500,
+  timeoutMs: 60_000,
+})
+```
+
+## SSE streaming
+
+```typescript
+for await (const chunk of client.stream('review-code', { code: '...' })) {
+  process.stdout.write(String(chunk))
+}
+```
+
+`stream()` sends to `POST /agent/stream` and returns an async generator over SSE chunks. The stream ends when the agent sends `"done": true`.
+
+## Calling a trusted-peers skill
+
+A `trusted-peers` skill only accepts callers whose `agent://` ID and public key are registered on the server. Use `AgentClient.prepare()` to generate the client keypair *before* connecting, so you can register it first:
+
+```typescript
+// 1. Generate client identity without connecting
+const client = await AgentClient.prepare()
+
+// 2. Register the client's public key on the server
+serverAgent.trustPeer(client.agentId, client.publicKey)
+
+// 3. Now connect and call
+await client.connect('https://server-agent.com')
+const result = await client.call('internal-skill', { data: '...' })
+```
+
+## Error handling
+
+```typescript
+import { SamvadError, ErrorCode } from '@samvad-protocol/sdk'
+
+try {
+  const result = await client.call('review-code', { code: '...' })
+} catch (err) {
+  if (err instanceof SamvadError) {
+    switch (err.code) {
+      case ErrorCode.RATE_LIMITED:
+        // back off and retry
+        break
+      case ErrorCode.AUTH_FAILED:
+        // signature verification failed or bearer token missing
+        break
+      case ErrorCode.SCHEMA_INVALID:
+        // input didn't match the skill's schema
+        break
+    }
+  }
+}
+```
+
+See [Error Codes](/protocol/error-codes) for the full list.

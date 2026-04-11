@@ -1,0 +1,84 @@
+---
+title: Security Model
+description: Eight automatic security layers enforced by every compliant SAMVAD SDK.
+---
+
+SAMVAD enforces eight layers of security automatically. If you use a compliant SDK, you don't write any security code — the unsafe path is the one that requires effort.
+
+## The eight layers
+
+### L1 — Agent Identity (DNS + TLS)
+
+An agent's identity is its domain. TLS certificate must match the claimed domain. No new PKI infrastructure — standard web certificates are sufficient.
+
+### L2 — Message Signing (Ed25519 + Canonical JSON)
+
+Every envelope is signed with Ed25519 over a recursive canonical JSON serialization of all fields except `signature` — keys sorted lexicographically at every depth, no insignificant whitespace. Any field reordering, body substitution, or field addition invalidates the signature.
+
+Each message carries a UUID nonce and an ISO timestamp. Receivers reject anything older than **5 minutes** or whose nonce has been seen inside the window — preventing replay attacks.
+
+### L3 — Trust Tiers
+
+Each skill picks one tier, enforced **after** signature verification:
+
+| Tier | Who can call |
+|---|---|
+| `public` | Anyone with a valid signature |
+| `authenticated` | Callers with a Bearer token you issued |
+| `trusted-peers` | Specific `agent://` IDs in the `allowedPeers` list |
+
+Trust tier enforcement happens after signature verification — a forged sender ID cannot claim peer trust.
+
+### L4 — Input Validation + Injection Defense
+
+Every payload is validated against the skill's JSON Schema before the handler runs. Unknown fields are stripped. `maxLength` declarations are enforced.
+
+<Warning>
+The built-in injection scanner (`injection-scanner.ts`) is a **regex first-pass only**. OWASP GenAI Security research shows adaptive attacks bypass regex-based detectors with over 90% success. It's a speed bump, not a safety proof.
+
+For high-trust skills: layer in an LLM-based classifier (LLM Guard, Guardrails AI), apply least-privilege to whatever the handler touches, and always wrap peer input in an untrusted-input boundary before it enters an LLM context.
+</Warning>
+
+<Note>
+The injection scan runs **only after** signature verification — untrusted input is never processed before the sender's identity is proven.
+</Note>
+
+### L5 — Rate Limiting + Token Budgets
+
+Per-sender sliding-window request limits and daily token budgets, declared in the agent card and enforced automatically:
+
+```json
+"rateLimit": {
+  "requestsPerMinute": 60,
+  "requestsPerSender": 10,
+  "tokensPerSenderPerDay": 100000
+}
+```
+
+`tokensPerSenderPerDay` tracks actual LLM token consumption per verified sender. When exhausted, the agent returns `TOKEN_BUDGET_EXCEEDED` with a `Retry-After` header.
+
+### L6 — Key Versioning + Revocation
+
+The agent card lists every key with its `kid` and `active` status. Receivers re-fetch the card after `cardTTL` seconds — deactivating a key in the card propagates globally with no central revocation server needed.
+
+### L7 — Delegation Scope + Depth (EdDSA JWT)
+
+Delegation tokens (RFC 8693 JWTs) carry `scope` and `maxDepth`. Each hop verifies the token, checks the called skill is in scope, decrements depth, and rejects if depth reaches zero. Prevents runaway agent graphs and privilege escalation through delegation chains.
+
+### L8 — Audit Trail (OpenTelemetry-compatible)
+
+Every envelope carries `traceId`, `spanId`, and `parentSpanId`. The full call tree of any multi-agent conversation is reconstructible from any participant's logs. Compatible with Grafana, Datadog, and other OpenTelemetry consumers.
+
+## Verify pipeline ordering
+
+The SDK enforces this exact ordering — cheap rejections first, expensive ones last:
+
+```
+1. Nonce + timestamp check     (fast, no I/O)
+2. Rate limit check            (fast, in-memory)
+3. Ed25519 signature verify    (crypto, against knownPeers cache)
+4. Prompt injection scan       (only after auth — proven sender)
+5. Trust tier enforcement      (business logic)
+```
+
+This ordering is deliberate. Reordering steps (e.g. scanning before verifying) changes the security posture — don't do it.

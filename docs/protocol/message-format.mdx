@@ -1,0 +1,96 @@
+---
+title: Message Format
+description: The signed request and response envelope shared by all SAMVAD communication modes.
+---
+
+All three communication modes — sync, async, and stream — use the same signed envelope. The format never changes based on delivery mechanism; only the endpoint and response behavior differ.
+
+## Request envelope
+
+```json
+{
+  "from": "agent://sender.com",
+  "to": "agent://receiver.com",
+  "skill": "review-code",
+  "mode": "sync",
+  "nonce": "a1b2c3d4e5f6",
+  "timestamp": "2026-04-11T10:00:00Z",
+  "kid": "key-2",
+  "signature": "base64-Ed25519-signature",
+  "traceId": "root-correlation-uuid",
+  "spanId": "this-hop-uuid",
+  "parentSpanId": "caller-span-uuid",
+  "delegationToken": null,
+  "auth": { "scheme": "bearer", "token": "…" },
+  "payload": {
+    "code": "function foo() { return 1 }",
+    "language": "typescript"
+  }
+}
+```
+
+| Field | Required | Description |
+|---|---|---|
+| `from` | Yes | Sender's `agent://` identity |
+| `to` | Yes | Receiver's `agent://` identity |
+| `skill` | Yes | Skill ID to invoke |
+| `mode` | Yes | `sync`, `async`, or `stream` |
+| `nonce` | Yes | Unique random value; receivers reject duplicates within 5 minutes |
+| `timestamp` | Yes | ISO 8601 UTC; receivers reject messages older than 5 minutes |
+| `kid` | Yes | Key ID from the sender's agent card |
+| `signature` | Yes | Ed25519 signature (see below) |
+| `traceId` | Yes | Root correlation ID for distributed tracing |
+| `spanId` | Yes | This hop's unique ID |
+| `parentSpanId` | No | Parent span ID; null for root hops |
+| `delegationToken` | No | EdDSA JWT; null when not delegating |
+| `auth` | No | Required for `authenticated` skills |
+| `callbackUrl` | No | Async mode only — URL for webhook delivery |
+| `payload` | No | Skill input; must conform to `inputSchema` |
+
+## Signature computation
+
+The signature covers a **recursive canonical JSON** serialization of all fields except `signature`:
+
+1. Recursively sort object keys lexicographically at every depth
+2. No insignificant whitespace
+3. Sign the resulting UTF-8 bytes with Ed25519
+4. Base64-encode the 64-byte signature
+
+Any tampering — including field reordering or body substitution — invalidates the signature.
+
+<Note>
+A future protocol version will migrate to RFC 9421 (HTTP Message Signatures) for interoperability with IETF-standard tooling. The current canonical JSON format is stable for v1.1.
+</Note>
+
+## Response envelope
+
+```json
+{
+  "traceId": "root-correlation-uuid",
+  "spanId": "responder-uuid",
+  "status": "ok",
+  "result": {
+    "issues": [],
+    "summary": "No issues found"
+  }
+}
+```
+
+On error:
+
+```json
+{
+  "traceId": "root-correlation-uuid",
+  "spanId": "responder-uuid",
+  "status": "error",
+  "error": {
+    "code": "SCHEMA_INVALID",
+    "message": "Field 'code' exceeds maxLength of 50000 characters"
+  }
+}
+```
+
+## JSON Schema
+
+- [`schema/v1.1/request-envelope.schema.json`](https://github.com/w3rc/samvad/blob/main/schema/v1.1/request-envelope.schema.json)
+- [`schema/v1.1/response-envelope.schema.json`](https://github.com/w3rc/samvad/blob/main/schema/v1.1/response-envelope.schema.json)

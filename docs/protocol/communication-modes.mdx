@@ -1,0 +1,103 @@
+---
+title: Communication Modes
+description: Sync, async, and SSE streaming — same envelope, different delivery.
+---
+
+All three modes share the same signed envelope and the same verify pipeline. They differ only in how the result is delivered.
+
+## Sync — POST /agent/message
+
+Standard request/response. The agent returns HTTP 200 with the result body. Best for tasks completing in under ~30 seconds.
+
+```
+Caller  →  POST /agent/message  →  Agent
+Caller  ←  HTTP 200 { result }  ←  Agent
+```
+
+The full request envelope is the POST body. The response is the response envelope.
+
+## Async — POST /agent/task
+
+Fire-and-forget. The agent accepts the task and returns HTTP 202 immediately; the handler runs in the background. Results are delivered via webhook and/or polling.
+
+```
+Caller  →  POST /agent/task         →  Agent
+Caller  ←  HTTP 202 { taskId }      ←  Agent
+                   ... (task runs) ...
+Agent   →  POST callbackUrl { result }  →  Caller  (optional)
+```
+
+**Request** — add `callbackUrl` to the standard envelope:
+
+```json
+{
+  "callbackUrl": "https://caller.com/agent/message",
+  "payload": { "…": "…" }
+}
+```
+
+**Immediate response:**
+
+```json
+{ "taskId": "task-uuid", "status": "accepted" }
+```
+
+When complete, the agent POSTs the full response envelope to `callbackUrl`, signed by the agent's key.
+
+### Task status polling
+
+Because webhook delivery fails silently in real-world conditions (~20% failure rate at peak load), callers must implement polling as a fallback.
+
+```
+GET /agent/task/:taskId
+```
+
+```json
+// Running
+{ "taskId": "task-uuid", "status": "running", "progress": 0.4 }
+
+// Done
+{ "taskId": "task-uuid", "status": "done", "result": { "…": "…" } }
+
+// Failed
+{ "taskId": "task-uuid", "status": "failed", "error": { "code": "…", "message": "…" } }
+```
+
+Valid status values: `pending` | `running` | `done` | `failed`.
+
+Agents must retain task results for at least **1 hour** after reaching `done` or `failed`.
+
+The TypeScript SDK's `client.taskAndPoll()` handles polling automatically with configurable interval and timeout.
+
+## Stream — POST /agent/stream
+
+Server-Sent Events connection. The full signed envelope is sent as the POST body (same format as `/agent/message`). The response is `text/event-stream`.
+
+```
+Caller  →  POST /agent/stream        →  Agent
+Caller  ←  text/event-stream chunks  ←  Agent
+```
+
+The agent sends chunks as they are generated. The final event carries `"done": true` and the full typed result:
+
+```
+data: {"chunk": "Reviewing lines 1-50...", "done": false}
+data: {"chunk": "Found issue on line 12...", "done": false}
+: keep-alive
+data: {"done": true, "result": { "issues": [...], "summary": "..." }}
+```
+
+**Required response headers** (prevents proxy buffering):
+
+```
+Content-Type: text/event-stream
+Cache-Control: no-cache
+Connection: keep-alive
+X-Accel-Buffering: no
+```
+
+Servers must send a keep-alive comment every **15 seconds** when no data is flowing.
+
+<Note>
+Browser clients cannot use the native `EventSource` API (GET-only). Use `fetch()` with a streaming reader, or the SDK's `client.stream()` which handles this automatically.
+</Note>

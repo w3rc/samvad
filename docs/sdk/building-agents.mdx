@@ -1,0 +1,117 @@
+---
+title: Building Agents
+description: How to configure an Agent, register skills, and serve the SAMVAD endpoints.
+---
+
+## Agent configuration
+
+```typescript
+import { Agent } from '@samvad-protocol/sdk'
+
+const agent = new Agent({
+  name: 'CodeReview Agent',          // Required
+  version: '1.0.0',                  // Optional, defaults to '0.1.0'
+  description: 'Reviews code',       // Required
+  url: 'https://myagent.com',        // Required — your public HTTPS base URL
+  specializations: ['code-review'],  // Optional discovery tags
+  models: [{ provider: 'anthropic', model: 'claude-opus-4-6' }],
+  keysDir: '.samvad/keys',           // Optional, this is the default
+  rateLimit: {
+    requestsPerMinute: 60,
+    requestsPerSender: 10,
+    tokensPerSenderPerDay: 100_000,
+  },
+})
+```
+
+## Registering skills
+
+Each skill declares its input/output schemas via Zod, supported communication modes, and trust tier.
+
+```typescript
+import { z } from 'zod'
+
+agent.skill('review-code', {
+  name: 'Review Code',
+  description: 'Reviews a code snippet for bugs, security issues, and style',
+  input: z.object({
+    code: z.string().max(50_000),
+    language: z.string().optional(),
+  }),
+  output: z.object({
+    issues: z.array(z.object({
+      line: z.number(),
+      severity: z.enum(['error', 'warning', 'info']),
+      message: z.string(),
+    })),
+    summary: z.string(),
+  }),
+  modes: ['sync', 'stream'],
+  trust: 'public',
+  handler: async (input, ctx) => {
+    // input is fully typed and pre-validated
+    // ctx.sender     — verified agent:// ID of the caller
+    // ctx.traceId    — trace correlation ID
+    // ctx.spanId     — this hop's span ID
+    // ctx.delegationToken — JWT if this is a delegated call
+    return { issues: [], summary: 'No issues found' }
+  },
+})
+```
+
+<Note>
+Input is validated against your Zod schema before the handler runs. If validation fails, the caller receives `SCHEMA_INVALID` — your handler is never invoked.
+</Note>
+
+## Trust tiers
+
+```typescript
+// Anyone with a valid signature can call — no Bearer token needed
+trust: 'public'
+
+// Requires a Bearer token you issued
+trust: 'authenticated'
+
+// Only the specific agent:// IDs in allowedPeers
+trust: 'trusted-peers',
+allowedPeers: ['agent://billing.internal', 'agent://inventory.internal'],
+```
+
+See [Access Control](/security/access-control) for the full patterns.
+
+## Trusting specific peers
+
+For `trusted-peers` skills, register the caller's public key before they connect:
+
+```typescript
+agent.trustPeer('agent://other.com', base64PublicKey)
+```
+
+Use `AgentClient.prepare()` on the client side to get the public key before connecting — see [Calling Agents](/sdk/calling-agents#trusted-peers).
+
+## Starting the server
+
+```typescript
+await agent.serve({ port: 3000 })
+// [SAMVAD] Agent "CodeReview Agent" listening on 0.0.0.0:3000
+// [SAMVAD] Card: http://localhost:3000/.well-known/agent.json
+```
+
+On first `serve()` the SDK generates and persists an Ed25519 keypair under `keysDir`. Subsequent runs load the existing key — the agent's identity is stable across restarts.
+
+## Skill chaining
+
+Skills can call other agents using `AgentClient`:
+
+```typescript
+import { AgentClient } from '@samvad-protocol/sdk'
+
+agent.skill('orchestrate', {
+  // ...
+  handler: async (input, ctx) => {
+    const reviewer = await AgentClient.from('https://reviewer.com')
+    const result = await reviewer.call('review-code', { code: input.code })
+    return { summary: result.summary }
+  },
+})
+```

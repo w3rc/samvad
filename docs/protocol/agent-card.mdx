@@ -1,0 +1,93 @@
+---
+title: Agent Card
+description: The /.well-known/agent.json format — machine-readable identity for every SAMVAD agent.
+---
+
+Every compliant agent hosts its identity card at:
+
+```
+GET /.well-known/agent.json
+```
+
+The card is the single source of truth for the agent's identity, capabilities, public keys, and endpoints. Callers fetch it once and cache it for `cardTTL` seconds.
+
+## Full schema
+
+```json
+{
+  "id": "agent://myagent.com",
+  "name": "CodeReview Agent",
+  "version": "1.2.0",
+  "description": "Reviews code for bugs, security issues, and style",
+  "url": "https://myagent.com",
+  "protocolVersion": "1.1",
+  "specializations": ["code-review", "security-audit"],
+  "models": [
+    { "provider": "anthropic", "model": "claude-opus-4-6" }
+  ],
+  "skills": [ /* see Skill definition below */ ],
+  "publicKeys": [
+    { "kid": "key-2", "key": "base64encodedEd25519publickey", "active": true },
+    { "kid": "key-1", "key": "base64encodedEd25519publickey", "active": false }
+  ],
+  "auth": {
+    "schemes": ["bearer", "none"]
+  },
+  "rateLimit": {
+    "requestsPerMinute": 60,
+    "requestsPerSender": 10,
+    "tokensPerSenderPerDay": 100000
+  },
+  "cardTTL": 300,
+  "endpoints": {
+    "intro":      "/agent/intro",
+    "message":    "/agent/message",
+    "task":       "/agent/task",
+    "taskStatus": "/agent/task/:taskId",
+    "stream":     "/agent/stream",
+    "health":     "/agent/health"
+  }
+}
+```
+
+## Skill definition
+
+Each skill in the `skills` array:
+
+```json
+{
+  "id": "review-code",
+  "name": "Review Code",
+  "description": "Reviews a code snippet for bugs, security issues, and style",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "code": { "type": "string", "maxLength": 50000 },
+      "language": { "type": "string" }
+    },
+    "required": ["code"]
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "issues": { "type": "array", "items": { "..." : "..." } },
+      "summary": { "type": "string" }
+    },
+    "required": ["issues", "summary"]
+  },
+  "modes": ["sync", "stream"],
+  "trust": "public"
+}
+```
+
+For `trusted-peers` skills, add `"allowedPeers": ["agent://billing.internal"]`.
+
+## Key rotation and revocation
+
+Active keys have `"active": true`. Revoked keys remain in the card with `"active": false` so receivers can identify them, but signature verification against an inactive key must fail.
+
+Receivers re-fetch the card every `cardTTL` seconds. Deactivating a key propagates globally without any central revocation server.
+
+## JSON Schema
+
+The full JSON Schema for the agent card is at [`schema/v1.1/agent-card.schema.json`](https://github.com/w3rc/samvad/blob/main/schema/v1.1/agent-card.schema.json).

@@ -1,0 +1,44 @@
+---
+title: Error Codes
+description: Standard error codes returned by all compliant SAMVAD agents.
+---
+
+All protocol errors are returned as a response envelope with `"status": "error"` and an `error` object:
+
+```json
+{
+  "status": "error",
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "Sender exceeded 10 requests per minute"
+  }
+}
+```
+
+## Code reference
+
+| Code | HTTP | Meaning |
+|---|---|---|
+| `AUTH_FAILED` | 401 | Invalid or missing signature, unknown sender key, or missing Bearer token for an `authenticated` skill |
+| `REPLAY_DETECTED` | 401 | Nonce has already been seen within the 5-minute replay window |
+| `SKILL_NOT_FOUND` | 404 | Skill ID does not exist on this agent |
+| `SCHEMA_INVALID` | 400 | Payload failed input schema validation (missing required field, wrong type, exceeded `maxLength`, etc.) |
+| `INJECTION_DETECTED` | 400 | Payload flagged by the prompt injection scanner |
+| `DELEGATION_EXCEEDED` | 400 | Delegation token's `scope` does not include the called skill, or `maxDepth` has reached 0 |
+| `RATE_LIMITED` | 429 | Sender exceeded the per-sender request rate declared in the agent card |
+| `TOKEN_BUDGET_EXCEEDED` | 429 | Sender exhausted their daily token budget; `Retry-After` header gives UTC midnight reset time |
+| `AGENT_UNAVAILABLE` | 500 | Agent is overloaded, starting up, or the skill handler threw an unhandled exception |
+
+## Retry guidance
+
+| Code | Retry? |
+|---|---|
+| `AUTH_FAILED` | No — fix the request (verify key is active, token is valid) |
+| `REPLAY_DETECTED` | Yes — generate a new nonce and timestamp |
+| `SKILL_NOT_FOUND` | No — re-fetch the agent card; skill may have been removed |
+| `SCHEMA_INVALID` | No — fix the payload |
+| `INJECTION_DETECTED` | No — review the payload content |
+| `DELEGATION_EXCEEDED` | No — request a new token with appropriate scope/depth |
+| `RATE_LIMITED` | Yes — back off and retry after a moment |
+| `TOKEN_BUDGET_EXCEEDED` | Yes — after the `Retry-After` header time |
+| `AGENT_UNAVAILABLE` | Yes — exponential backoff |

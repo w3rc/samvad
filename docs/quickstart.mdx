@@ -1,0 +1,103 @@
+---
+title: Quick Start
+description: Build and call your first SAMVAD agent in under 5 minutes.
+---
+
+## Install
+
+```bash
+npm install @samvad-protocol/sdk zod
+```
+
+Requires Node.js 20+. The SDK is ESM-only.
+
+## Build an agent
+
+Create `hello-agent.ts`:
+
+```typescript
+import { Agent } from '@samvad-protocol/sdk'
+import { z } from 'zod'
+
+const agent = new Agent({
+  name: 'Hello Agent',
+  description: 'A simple greeting agent',
+  url: 'http://localhost:3002',
+  specializations: ['greetings'],
+})
+
+agent.skill('greet', {
+  name: 'Greet',
+  description: 'Returns a personalised greeting',
+  input: z.object({
+    name: z.string().max(100),
+    language: z.enum(['en', 'es', 'fr']).optional(),
+  }),
+  output: z.object({ greeting: z.string() }),
+  modes: ['sync', 'stream'],
+  trust: 'public',
+  handler: async (input) => {
+    const { name, language } = input as { name: string; language?: 'en' | 'es' | 'fr' }
+    const greetings = { en: 'Hello', es: 'Hola', fr: 'Bonjour' }
+    return { greeting: `${greetings[language ?? 'en']}, ${name}!` }
+  },
+})
+
+agent.serve({ port: 3002 })
+```
+
+Run it:
+
+```bash
+npx tsx hello-agent.ts
+```
+
+<Note>
+On first run the SDK generates an Ed25519 keypair in `.samvad/keys/` and starts serving automatically. That directory is gitignored — never commit it.
+</Note>
+
+Your agent is now live at `http://localhost:3002` with these endpoints:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /.well-known/agent.json` | Machine-readable agent card |
+| `GET /agent/intro` | Human-readable introduction |
+| `GET /agent/health` | Liveness check |
+| `POST /agent/message` | Synchronous calls |
+| `POST /agent/task` | Async tasks |
+| `GET /agent/task/:taskId` | Task status polling |
+| `POST /agent/stream` | SSE streaming |
+
+## Call the agent
+
+Create `call-agent.ts`:
+
+```typescript
+import { AgentClient } from '@samvad-protocol/sdk'
+
+const client = await AgentClient.from('http://localhost:3002')
+const result = await client.call('greet', { name: 'Ada', language: 'en' })
+console.log(result) // { greeting: 'Hello, Ada!' }
+```
+
+Run both in separate terminals. That's it — a signed, rate-limited, schema-validated, streaming-capable agent with one call.
+
+## What just happened
+
+1. `AgentClient.from()` fetched the remote agent card (`/.well-known/agent.json`) and loaded the public key.
+2. `client.call()` built a signed message envelope — nonce, timestamp, Ed25519 signature over canonical JSON of all fields.
+3. The agent verified the signature, checked the nonce window, validated the input schema, and ran your handler.
+4. The result came back in a signed response envelope.
+
+All of that is automatic.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Building Agents" icon="server" href="/sdk/building-agents">
+    Rate limits, trust tiers, async mode, and more.
+  </Card>
+  <Card title="Calling Agents" icon="arrow-right" href="/sdk/calling-agents">
+    Async tasks, polling, SSE streaming, delegation.
+  </Card>
+</CardGroup>

@@ -1,0 +1,59 @@
+---
+title: Discovery
+description: Self-sovereign discovery and the optional public registry.
+---
+
+SAMVAD has two discovery mechanisms. The first requires no infrastructure. The second is opt-in.
+
+## Self-sovereign discovery
+
+If you know an agent's domain, you can reach it immediately — no registry, no lookup service:
+
+1. Fetch `https://theirdomain.com/.well-known/agent.json`
+2. Read their skills, endpoints, and public key
+3. Call any `public` skill immediately
+
+This is the primary discovery mechanism. Registry support is optional and never a gatekeeper.
+
+## Optional public registry
+
+Agents that want to be *findable* can register with a public index. The registry crawls the agent card, indexes it, and re-crawls every `cardTTL` seconds.
+
+### Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/register` | Submit agent card URL for indexing |
+| `GET` | `/search` | Search by specialization, model, capability, or free text |
+| `GET` | `/agents/:id` | Fetch a specific agent's indexed card |
+| `DELETE` | `/agents/:id` | Remove from the registry (signed by the agent's own key) |
+
+### Search parameters
+
+| Param | Description | Example |
+|---|---|---|
+| `q` | Free text search | `code-review` |
+| `specialization` | Filter by specialization tag | `security-audit` |
+| `model` | Filter by model provider or name | `claude` |
+| `mode` | Filter by supported communication mode | `stream` |
+| `page` | Page number (default: 1) | `2` |
+| `limit` | Results per page (max 50, default 20) | `10` |
+
+```
+GET /search?q=code-review&model=claude&mode=stream&page=1&limit=20
+```
+
+Response:
+
+```json
+{
+  "total": 42,
+  "page": 1,
+  "limit": 20,
+  "results": [ /* array of agent cards */ ]
+}
+```
+
+<Note>
+No public SAMVAD registry is running yet — this is the planned API. See the [roadmap](https://github.com/w3rc/samvad#roadmap) for status. Running a registry is not required to participate in the protocol.
+</Note>

@@ -1,0 +1,58 @@
+---
+title: What is SAMVAD?
+description: The Open Sovereign Agent Dialogue Protocol — secure, decentralized agent-to-agent communication.
+---
+
+**SAMVAD** — **S**ecure **A**gent **M**essaging, **V**erification **A**nd **D**iscovery
+
+*samvad* (संवाद) — Sanskrit for "dialogue between parties."
+
+SAMVAD is an open protocol for AI agents on the public internet to discover each other, verify each other's identity, and exchange typed messages — with **no central authority**, no platform sign-up, and a ten-minute path from zero to a working agent.
+
+## The core idea
+
+An agent's identity is its domain. If you can host a JSON file at `/.well-known/agent.json` and serve HTTPS, you're on the network — no accounts, no registry gate required.
+
+```
+agent://myagent.com  →  https://myagent.com
+```
+
+Every message is signed with an Ed25519 key declared in the agent card. The receiver verifies the signature, checks the nonce for replay, enforces rate limits, validates the input schema, and enforces the skill's trust tier — all automatically if using a compliant SDK.
+
+## What SAMVAD gives you
+
+<CardGroup cols={2}>
+  <Card title="Secure by default" icon="shield-check">
+    Eight security layers enforced automatically: signing, replay protection, rate limiting, input validation, injection scanning, delegation scope, key rotation, and audit trails.
+  </Card>
+  <Card title="Three communication modes" icon="arrows-left-right">
+    Sync request/response, async with webhook callback, and SSE streaming — all over the same signed envelope format.
+  </Card>
+  <Card title="Self-sovereign identity" icon="key">
+    Your domain is your identity. Standard web PKI — no new infrastructure, no accounts, no API keys to establish who you are.
+  </Card>
+  <Card title="Language-agnostic spec" icon="code">
+    Protocol is wire-format only. A TypeScript SDK ships today; any language that can do HTTPS and Ed25519 can implement it.
+  </Card>
+</CardGroup>
+
+## What SAMVAD is not
+
+- **Not an orchestration engine.** Workflow runtimes and multi-step pipelines are built on top of SAMVAD, not in it.
+- **Not a billing system.** The protocol provides trust tiers; how you charge for access is your product.
+- **Not a discovery registry.** You can call any agent whose domain you know without any registry. An optional public registry for search-by-specialization is on the roadmap.
+
+## Protocol status
+
+> **Pre-1.0.** Protocol version `1.1`. The spec is stable; the TypeScript SDK is feature-complete for the core protocol. APIs may change before 1.0.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Build and call your first SAMVAD agent in under 5 minutes.
+  </Card>
+  <Card title="Protocol Spec" icon="book" href="/protocol/overview">
+    Read the full language-agnostic protocol specification.
+  </Card>
+</CardGroup>

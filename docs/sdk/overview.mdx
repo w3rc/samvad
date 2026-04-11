@@ -1,0 +1,64 @@
+---
+title: TypeScript SDK
+description: "@samvad-protocol/sdk — the reference implementation of the SAMVAD protocol."
+---
+
+## Installation
+
+```bash
+npm install @samvad-protocol/sdk zod
+```
+
+- **Package:** `@samvad-protocol/sdk`
+- **Node:** 20+
+- **Module format:** ESM-only (`"type": "module"`)
+- **Dependencies:** `fastify`, `zod`, `@noble/ed25519`, `jose`
+
+## What the SDK handles automatically
+
+You write a handler. The SDK handles everything else:
+
+| Concern | What the SDK does |
+|---|---|
+| Ed25519 keys | Generates, persists, and loads keypairs from `.samvad/keys/` |
+| Message signing | Signs every outbound envelope over canonical JSON |
+| Signature verification | Verifies every inbound signature against the sender's card |
+| Replay prevention | Tracks nonces in a 5-minute window |
+| Rate limiting | Per-sender sliding-window request limits + daily token budgets |
+| Input validation | Validates payloads against your Zod schema before the handler runs |
+| Agent card | Generates and serves `/.well-known/agent.json` from your config |
+| Standard endpoints | Serves `/agent/intro`, `/agent/health`, task polling, SSE |
+| Delegation | Issues and verifies EdDSA JWT delegation tokens (RFC 8693) |
+| Tracing | Generates and propagates OpenTelemetry-compatible trace/span IDs |
+
+## Core API surface
+
+```typescript
+import {
+  Agent,          // Build and serve an agent
+  AgentClient,    // Call remote agents
+  SamvadError,    // Protocol error class
+  ErrorCode,      // Error code constants
+  // Types:
+  AgentCard, SkillDef, MessageEnvelope, ResponseEnvelope,
+  TaskRecord, TaskStatus, TrustTier, CommunicationMode,
+  SkillContext, PublicKey, RateLimit,
+} from '@samvad-protocol/sdk'
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Building Agents" icon="server" href="/sdk/building-agents">
+    Skills, trust tiers, rate limits, async mode.
+  </Card>
+  <Card title="Calling Agents" icon="arrow-right" href="/sdk/calling-agents">
+    Sync calls, async tasks, SSE streaming.
+  </Card>
+  <Card title="Delegation" icon="link" href="/sdk/delegation">
+    JWT delegation tokens for multi-agent chains.
+  </Card>
+  <Card title="npm" icon="box" href="https://www.npmjs.com/package/@samvad-protocol/sdk">
+    View on npm.
+  </Card>
+</CardGroup>

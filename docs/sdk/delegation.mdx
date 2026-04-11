@@ -1,0 +1,70 @@
+---
+title: Delegation
+description: JWT delegation tokens for multi-agent chains with scope and depth limits.
+---
+
+When Agent A asks Agent B to act on its behalf — and Agent B may need to call Agent C — delegation tokens prevent runaway privilege escalation and unbounded chain depth.
+
+## How it works
+
+Agent A mints a JWT signed with its own Ed25519 private key and includes it in the message envelope's `delegationToken` field. At each hop:
+
+1. The receiver verifies the JWT signature against the issuer's published public key
+2. Checks that the current skill is in the token's `scope`
+3. Decrements `maxDepth` — rejects the call if depth reaches 0
+4. Checks `exp` — rejects expired tokens
+
+## Minting a token
+
+```typescript
+import { createDelegationToken } from '@samvad-protocol/sdk'
+
+const token = await createDelegationToken({
+  issuer: 'agent://a.com',          // Who is delegating
+  subject: 'agent://b.com',         // Who is being delegated to
+  scope: ['review-code', 'summarize-code'],  // Skills B may invoke
+  maxDepth: 2,                      // Maximum further hops (decremented each hop)
+  expiresInSeconds: 300,            // Token lifetime
+  privateKey: myKeypair.privateKey,
+})
+```
+
+Pass `token` as `delegationToken` in your `AgentClient.call()` options (or handle it at the envelope level for custom clients).
+
+## Token structure
+
+```json
+{
+  "iss": "agent://a.com",
+  "sub": "agent://b.com",
+  "scope": "review-code summarize-code",
+  "maxDepth": 2,
+  "exp": 1744371600,
+  "act": { "sub": "agent://a.com" }
+}
+```
+
+The `act` claim follows RFC 8693 and records the original actor in chained delegation — so a chain of `A → B → C` is auditable at each hop.
+
+## Depth enforcement
+
+`maxDepth: 2` means Agent B can sub-delegate to Agent C (depth becomes 1), and Agent C can further delegate to Agent D (depth becomes 0). Agent D cannot delegate further — `DELEGATION_EXCEEDED` is returned.
+
+Setting `maxDepth: 1` means no sub-delegation is allowed past the first recipient.
+
+## Scope enforcement
+
+Agent B can only invoke skills listed in `scope`. Attempting to call an out-of-scope skill returns `DELEGATION_EXCEEDED` with a message indicating the scope violation.
+
+## Verifying a token (SDK internals)
+
+The SDK verifies tokens automatically before invoking handlers. The verification result is available in the handler's `ctx.delegationToken` if you need to inspect it:
+
+```typescript
+handler: async (input, ctx) => {
+  if (ctx.delegationToken) {
+    // ctx.delegationToken is the raw JWT string
+    // Verification already passed — issuer, scope, depth, and exp were checked
+  }
+}
+```
