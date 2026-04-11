@@ -9,7 +9,7 @@ import { signRequest } from '../src/signing.js'
 import { buildAgentCard } from '../src/card.js'
 import { z } from 'zod'
 import type { FastifyInstance } from 'fastify'
-import type { MessageEnvelope } from '../src/types.js'
+import type { MessageEnvelope, InjectionClassifier } from '../src/types.js'
 
 async function makeServer() {
   const kp = await generateKeypair('key-1')
@@ -165,5 +165,82 @@ describe('server endpoints', () => {
     expect(pollRes.statusCode).toBe(200)
     const pollBody = JSON.parse(pollRes.body)
     expect(['running', 'done']).toContain(pollBody.status)
+  })
+})
+
+async function makeServerWithClassifier(injectionClassifier: InjectionClassifier) {
+  const kp = await generateKeypair('key-1')
+  const registry = new SkillRegistry()
+  registry.register('echo', {
+    name: 'Echo',
+    description: 'Echoes input',
+    input: z.object({ text: z.string() }),
+    output: z.object({ echo: z.string() }),
+    modes: ['sync', 'async', 'stream'],
+    trust: 'public',
+    handler: async (input) => ({ echo: (input as { text: string }).text }),
+  })
+  const card = buildAgentCard({
+    name: 'Test Agent', version: '1.0.0', description: 'Test',
+    url: 'https://testagent.com', specializations: [],
+    models: [{ provider: 'test', model: 'test' }],
+    skills: registry.getDefs(),
+    publicKeys: [{ kid: 'key-1', key: Buffer.from(kp.publicKey).toString('base64'), active: true }],
+    rateLimit: { requestsPerMinute: 60, requestsPerSender: 100 }, cardTTL: 300,
+  })
+  const server = buildServer({
+    card, registry, keypair: kp,
+    taskStore: new TaskStore(3600_000),
+    rateLimiter: new RateLimiter(card.rateLimit),
+    nonceStore: new NonceStore(5 * 60_000),
+    introText: '# Test Agent',
+    knownPeers: new Map([['agent://testagent.com', kp.publicKey]]),
+    injectionClassifier,
+  })
+  await server.ready()
+  return { server, kp }
+}
+
+describe('injectionClassifier', () => {
+  it('blocks request when classifier returns true', async () => {
+    const classifier: InjectionClassifier = async () => true
+    const { server, kp } = await makeServerWithClassifier(classifier)
+    const envelope = makeEnvelope({ payload: { text: 'hello' } })
+    const res = await signedInject(server, '/agent/message', envelope, kp)
+    expect(res.statusCode).toBe(400)
+    const body = JSON.parse(res.body)
+    expect(body.error.code).toBe('INJECTION_DETECTED')
+    await server.close()
+  })
+
+  it('passes request when classifier returns false', async () => {
+    const classifier: InjectionClassifier = async () => false
+    const { server, kp } = await makeServerWithClassifier(classifier)
+    const envelope = makeEnvelope({ payload: { text: 'hello' } })
+    const res = await signedInject(server, '/agent/message', envelope, kp)
+    expect(res.statusCode).toBe(200)
+    await server.close()
+  })
+
+  it('fails open when classifier throws — request proceeds', async () => {
+    const classifier: InjectionClassifier = async () => { throw new Error('API down') }
+    const { server, kp } = await makeServerWithClassifier(classifier)
+    const envelope = makeEnvelope({ payload: { text: 'hello' } })
+    const res = await signedInject(server, '/agent/message', envelope, kp)
+    expect(res.statusCode).toBe(200)
+    await server.close()
+  })
+
+  it('classifier is called with the payload object', async () => {
+    let capturedPayload: Record<string, unknown> | undefined
+    const classifier: InjectionClassifier = async (payload) => {
+      capturedPayload = payload
+      return false
+    }
+    const { server, kp } = await makeServerWithClassifier(classifier)
+    const envelope = makeEnvelope({ payload: { text: 'check me' } })
+    await signedInject(server, '/agent/message', envelope, kp)
+    expect(capturedPayload).toEqual({ text: 'check me' })
+    await server.close()
   })
 })

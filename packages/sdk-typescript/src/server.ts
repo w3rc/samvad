@@ -105,9 +105,21 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     )
     if (!valid) throw new SamvadError(ErrorCode.AUTH_FAILED, 'Invalid message signature')
 
-    // 4. Injection scan (after signature — only scan authenticated input)
+    // 4. Injection scan — regex first pass (fast, free), then optional LLM classifier
     if (scanObjectForInjection(envelope.payload)) {
       throw new SamvadError(ErrorCode.INJECTION_DETECTED, 'Potential prompt injection detected in payload')
+    }
+    if (opts.injectionClassifier) {
+      try {
+        const flagged = await opts.injectionClassifier(envelope.payload)
+        if (flagged) {
+          throw new SamvadError(ErrorCode.INJECTION_DETECTED, 'Input failed injection scan')
+        }
+      } catch (err) {
+        if (err instanceof SamvadError) throw err
+        // Classifier threw (network error, API down, etc.) — fail open
+        app.log.warn({ err }, 'injectionClassifier threw — failing open')
+      }
     }
 
     // 5. Trust tier enforcement (last — requires skill lookup)
