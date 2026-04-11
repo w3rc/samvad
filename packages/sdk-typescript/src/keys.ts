@@ -22,7 +22,7 @@ export async function saveKeypair(kp: Keypair, dir: string): Promise<void> {
     privateKey: Buffer.from(kp.privateKey).toString('base64'),
     publicKey: Buffer.from(kp.publicKey).toString('base64'),
   }
-  await writeFile(join(dir, `${kp.kid}.json`), JSON.stringify(data))
+  await writeFile(join(dir, `${kp.kid}.json`), JSON.stringify(data), { mode: 0o600 })
 }
 
 export async function loadKeypair(dir: string, kid: string): Promise<Keypair> {

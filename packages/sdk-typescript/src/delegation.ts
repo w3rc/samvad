@@ -69,7 +69,14 @@ export async function verifyDelegationToken(token: string, publicKey: Uint8Array
     throw new SamvadError(ErrorCode.AUTH_FAILED, `Invalid or expired delegation token: ${(err as Error).message}`)
   }
 
-  const maxDepth = payload.maxDepth as number
+  if (!Array.isArray(payload.scope) || payload.scope.some(s => typeof s !== 'string')) {
+    throw new SamvadError(ErrorCode.AUTH_FAILED, 'Delegation token missing or invalid scope claim')
+  }
+  if (typeof payload.maxDepth !== 'number') {
+    throw new SamvadError(ErrorCode.AUTH_FAILED, 'Delegation token missing or invalid maxDepth claim')
+  }
+
+  const maxDepth = payload.maxDepth
   if (maxDepth <= 0) throw new SamvadError(ErrorCode.DELEGATION_EXCEEDED, 'Delegation depth limit reached')
 
   return {

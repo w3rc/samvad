@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { generateKeypair, saveKeypair, loadKeypair, encodePublicKey } from '../src/keys.js'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -25,6 +25,13 @@ describe('keys', () => {
     expect(loaded.kid).toBe('key-1')
     expect(loaded.privateKey).toEqual(kp.privateKey)
     expect(loaded.publicKey).toEqual(kp.publicKey)
+  })
+
+  it('saves keypair with restricted file permissions (0o600)', async () => {
+    const kp = await generateKeypair('key-1')
+    await saveKeypair(kp, dir)
+    const stat = statSync(join(dir, 'key-1.json'))
+    expect(stat.mode & 0o777).toBe(0o600)
   })
 
   it('encodes public key as base64', async () => {

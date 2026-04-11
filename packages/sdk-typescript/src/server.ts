@@ -2,6 +2,7 @@
 import Fastify from 'fastify'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { randomUUID } from 'node:crypto'
+import { isIPv4, isIPv6 } from 'node:net'
 import type { AgentCard, MessageEnvelope, ResponseEnvelope, InjectionClassifier } from './types.js'
 import type { SkillRegistry } from './skill-registry.js'
 import type { TaskStore } from './task-store.js'
@@ -31,6 +32,30 @@ export interface ServerOptions {
   introText: string
   knownPeers: Map<string, Uint8Array>  // agentId -> publicKey cache
   injectionClassifier?: InjectionClassifier
+}
+
+/**
+ * Returns true for IPs/hostnames that should never receive outbound webhook calls.
+ * Note: does not defend against DNS rebinding — callers who need strict SSRF protection
+ * should resolve the hostname and re-check the IP before each fetch.
+ */
+function isPrivateHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, '') // strip IPv6 brackets
+  if (h === 'localhost' || h.endsWith('.local') || h.endsWith('.internal')) return true
+  if (isIPv4(h)) {
+    const [a, b] = h.split('.').map(Number)
+    return (
+      a === 127 ||                                   // 127.0.0.0/8 loopback
+      a === 10 ||                                    // 10.0.0.0/8 private
+      (a === 172 && b >= 16 && b <= 31) ||           // 172.16.0.0/12 private
+      (a === 192 && b === 168) ||                    // 192.168.0.0/16 private
+      (a === 169 && b === 254)                       // 169.254.0.0/16 link-local (AWS metadata)
+    )
+  }
+  if (isIPv6(h)) {
+    return h === '::1' || /^(fc|fd|fe80)/i.test(h)  // loopback + ULA + link-local
+  }
+  return false
 }
 
 export function buildServer(opts: ServerOptions): FastifyInstance {
@@ -107,6 +132,9 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     if (!valid) throw new SamvadError(ErrorCode.AUTH_FAILED, 'Invalid message signature')
 
     // 4. Delegation token verification (when present)
+    //    We extract `iss` from the unverified payload first so we can look up the issuer's
+    //    public key in knownPeers. This is safe: jwtVerify below will reject the token if
+    //    the extracted issuer's key doesn't match the actual signer.
     if (envelope.delegationToken) {
       const parts = envelope.delegationToken.split('.')
       let issuer: string | undefined
@@ -126,6 +154,10 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
         throw new SamvadError(ErrorCode.AUTH_FAILED, `Unknown delegation token issuer: ${issuer}`)
       }
       const claims = await verifyDelegationToken(envelope.delegationToken, issuerKey)
+      if (claims.sub !== envelope.from) {
+        throw new SamvadError(ErrorCode.AUTH_FAILED,
+          `Delegation token subject '${claims.sub}' does not match sender '${envelope.from}'`)
+      }
       if (!claims.scope.includes(envelope.skill)) {
         throw new SamvadError(ErrorCode.DELEGATION_EXCEEDED,
           `Delegation token scope does not include skill '${envelope.skill}'`)
@@ -157,6 +189,8 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
       throw new SamvadError(ErrorCode.SKILL_NOT_FOUND, `Skill '${envelope.skill}' not found`)
     }
     if (skillDef.trust === 'authenticated') {
+      // The SDK only checks that a token is present. Validating the token's content
+      // (expiry, claims, issuer) is the responsibility of the skill handler.
       if (!envelope.auth?.token) throw new SamvadError(ErrorCode.AUTH_FAILED, 'Bearer token required')
     }
     if (skillDef.trust === 'trusted-peers') {
@@ -219,6 +253,10 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
         reply.status(400)
         return errorResponse(new SamvadError(ErrorCode.SCHEMA_INVALID, 'callbackUrl must use https'), env.traceId, spanId)
       }
+      if (isPrivateHost(parsedCallback.hostname)) {
+        reply.status(400)
+        return errorResponse(new SamvadError(ErrorCode.SCHEMA_INVALID, 'callbackUrl must not target a private or loopback address'), env.traceId, spanId)
+      }
     }
 
     try {
@@ -260,6 +298,8 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   })
 
   // ── GET /agent/task/:taskId ──────────────────────────────────────────────
+  // Intentionally unauthenticated: the 122-bit UUID taskId is itself a bearer token —
+  // only the original submitter (who received the 202 response) knows it.
   app.get<{ Params: { taskId: string } }>('/agent/task/:taskId', async (req, reply) => {
     const task = opts.taskStore.get(req.params.taskId)
     if (!task) {

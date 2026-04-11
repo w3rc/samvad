@@ -27,7 +27,8 @@ export function buildAgentCard(opts: BuildCardOptions): AgentCard {
     models: opts.models,
     skills: opts.skills,
     publicKeys: opts.publicKeys,
-    auth: { schemes: ['bearer', 'none'] },
+    // Advertise 'bearer' only when at least one skill requires it
+    auth: { schemes: opts.skills.some(s => s.trust === 'authenticated') ? ['bearer', 'none'] : ['none'] },
     rateLimit: opts.rateLimit,
     cardTTL: opts.cardTTL,
     endpoints: {

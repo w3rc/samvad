@@ -307,6 +307,30 @@ describe('callbackUrl validation', () => {
     const res = await signedInject(server, '/agent/task', envelope, kp)
     expect(res.statusCode).toBe(202)
   })
+
+  it('rejects callbackUrl targeting AWS metadata endpoint (169.254.x.x)', async () => {
+    const envelope = { ...makeEnvelope({ mode: 'async', payload: { text: 'test' } }), callbackUrl: 'https://169.254.169.254/latest/meta-data' }
+    const res = await signedInject(server, '/agent/task', envelope, kp)
+    expect(res.statusCode).toBe(400)
+  })
+
+  it('rejects callbackUrl targeting loopback (127.0.0.1)', async () => {
+    const envelope = { ...makeEnvelope({ mode: 'async', payload: { text: 'test' } }), callbackUrl: 'https://127.0.0.1/webhook' }
+    const res = await signedInject(server, '/agent/task', envelope, kp)
+    expect(res.statusCode).toBe(400)
+  })
+
+  it('rejects callbackUrl targeting private network (192.168.x.x)', async () => {
+    const envelope = { ...makeEnvelope({ mode: 'async', payload: { text: 'test' } }), callbackUrl: 'https://192.168.1.100/webhook' }
+    const res = await signedInject(server, '/agent/task', envelope, kp)
+    expect(res.statusCode).toBe(400)
+  })
+
+  it('rejects callbackUrl targeting localhost hostname', async () => {
+    const envelope = { ...makeEnvelope({ mode: 'async', payload: { text: 'test' } }), callbackUrl: 'https://localhost/webhook' }
+    const res = await signedInject(server, '/agent/task', envelope, kp)
+    expect(res.statusCode).toBe(400)
+  })
 })
 
 // ── Important 9: Rate limit → HTTP 429 ──────────────────────────────────────
@@ -402,6 +426,27 @@ describe('delegation token enforcement', () => {
     const res = await signedInject(server, '/agent/message', envelope, kp)
     expect(res.statusCode).toBe(400)
     expect(JSON.parse(res.body).error.code).toBe('DELEGATION_EXCEEDED')
+    await server.close()
+  })
+
+  it('rejects delegation token whose sub does not match envelope.from', async () => {
+    const issuerKp = await generateKeypair('issuer-sub-key')
+    const token = await createDelegationToken({
+      issuer: 'agent://issuer.com',
+      subject: 'agent://other-agent.com',  // issued TO other-agent, not to testagent
+      scope: ['echo'],
+      maxDepth: 1,
+      expiresInSeconds: 300,
+      privateKey: issuerKp.privateKey,
+    })
+    const { server, kp } = await makeServerWithPeers(
+      new Map([['agent://issuer.com', issuerKp.publicKey]])
+    )
+    // envelope.from is agent://testagent.com but token.sub is agent://other-agent.com
+    const envelope = makeEnvelope({ delegationToken: token })
+    const res = await signedInject(server, '/agent/message', envelope, kp)
+    expect(res.statusCode).toBe(401)
+    expect(JSON.parse(res.body).error.code).toBe('AUTH_FAILED')
     await server.close()
   })
 

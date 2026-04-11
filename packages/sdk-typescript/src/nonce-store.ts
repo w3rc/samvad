@@ -22,7 +22,9 @@ export class NonceStore {
     return 'ok'
   }
 
-  // Evict expired nonces — Map is insertion-ordered so we only scan from the front
+  // Evict expired nonces — Map is insertion-ordered so we only scan from the front.
+  // Correctness relies on Date.now() being non-decreasing (NTP backward jumps would
+  // cause under-eviction, leaving some stale entries — harmless but not a security risk).
   private evict(): void {
     const cutoff = Date.now() - this.windowMs
     for (const [nonce, ts] of this.seen) {

@@ -9,6 +9,11 @@ import type { Keypair } from './keys.js'
  * Signed components: "@method", "@path", "content-digest"
  * Algorithm: ed25519 (EdDSA over Curve25519)
  * Body integrity: Content-Digest (RFC 9530, sha-256)
+ *
+ * Note: the `created` timestamp in Signature-Input is part of the signed payload and
+ * is echoed back verbatim during verification. Its freshness is NOT checked here —
+ * envelope-level replay protection (nonce + timestamp window) in NonceStore handles that.
+ * A future upgrade to full RFC 9421 compliance would add a `created` freshness window.
  */
 
 // Compute Content-Digest header value per RFC 9530
