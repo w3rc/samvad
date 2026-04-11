@@ -9,6 +9,7 @@ import type { RateLimiter } from './rate-limiter.js'
 import type { NonceStore } from './nonce-store.js'
 import type { Keypair } from './keys.js'
 import { verifyRequest } from './signing.js'
+import { verifyDelegationToken } from './delegation.js'
 import { scanObjectForInjection } from './injection-scanner.js'
 import { SamvadError, ErrorCode } from './errors.js'
 import { startSSE, sendSSEChunk, sendSSEKeepAlive, endSSE } from './stream.js'
@@ -105,7 +106,29 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
     )
     if (!valid) throw new SamvadError(ErrorCode.AUTH_FAILED, 'Invalid message signature')
 
-    // 4. Injection scan — regex first pass (fast, free), then optional LLM classifier
+    // 4. Delegation token verification (when present)
+    if (envelope.delegationToken) {
+      const parts = envelope.delegationToken.split('.')
+      let issuer: string | undefined
+      if (parts.length === 3) {
+        try {
+          const rawPayload = JSON.parse(Buffer.from(parts[1], 'base64url').toString())
+          issuer = rawPayload.iss
+        } catch {
+          // malformed payload — handled below
+        }
+      }
+      if (!issuer) {
+        throw new SamvadError(ErrorCode.AUTH_FAILED, 'Malformed delegation token')
+      }
+      const issuerKey = opts.knownPeers.get(issuer)
+      if (!issuerKey) {
+        throw new SamvadError(ErrorCode.AUTH_FAILED, `Unknown delegation token issuer: ${issuer}`)
+      }
+      await verifyDelegationToken(envelope.delegationToken, issuerKey)
+    }
+
+    // 5. Injection scan — regex first pass (fast, free), then optional LLM classifier
     if (scanObjectForInjection(envelope.payload)) {
       throw new SamvadError(ErrorCode.INJECTION_DETECTED, 'Potential prompt injection detected in payload')
     }
@@ -122,12 +145,15 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
       }
     }
 
-    // 5. Trust tier enforcement (last — requires skill lookup)
+    // 6. Trust tier enforcement — skill must exist before checking its trust tier
     const skillDef = opts.registry.getSkill(envelope.skill)?.def
-    if (skillDef?.trust === 'authenticated') {
+    if (!skillDef) {
+      throw new SamvadError(ErrorCode.SKILL_NOT_FOUND, `Skill '${envelope.skill}' not found`)
+    }
+    if (skillDef.trust === 'authenticated') {
       if (!envelope.auth?.token) throw new SamvadError(ErrorCode.AUTH_FAILED, 'Bearer token required')
     }
-    if (skillDef?.trust === 'trusted-peers') {
+    if (skillDef.trust === 'trusted-peers') {
       const allowed = skillDef.allowedPeers ?? []
       if (!allowed.includes(envelope.from)) {
         throw new SamvadError(ErrorCode.AUTH_FAILED, `Sender ${envelope.from} not in trusted-peers list`)

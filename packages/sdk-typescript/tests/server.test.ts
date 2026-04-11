@@ -7,6 +7,7 @@ import { NonceStore } from '../src/nonce-store.js'
 import { generateKeypair } from '../src/keys.js'
 import { signRequest } from '../src/signing.js'
 import { buildAgentCard } from '../src/card.js'
+import { createDelegationToken } from '../src/delegation.js'
 import { z } from 'zod'
 import type { FastifyInstance } from 'fastify'
 import type { MessageEnvelope, InjectionClassifier } from '../src/types.js'
@@ -168,6 +169,42 @@ describe('server endpoints', () => {
   })
 })
 
+/** Build a server with extra known peers and optional extra skills. */
+async function makeServerWithPeers(
+  extraPeers: Map<string, Uint8Array>,
+  extraSkills?: (registry: SkillRegistry) => void,
+) {
+  const kp = await generateKeypair('key-1')
+  const registry = new SkillRegistry()
+  registry.register('echo', {
+    name: 'Echo', description: 'Echoes input',
+    input: z.object({ text: z.string() }),
+    output: z.object({ echo: z.string() }),
+    modes: ['sync'], trust: 'public',
+    handler: async (input) => ({ echo: (input as { text: string }).text }),
+  })
+  extraSkills?.(registry)
+  const card = buildAgentCard({
+    name: 'Test Agent', version: '1.0.0', description: 'Test',
+    url: 'https://testagent.com', specializations: [],
+    models: [{ provider: 'test', model: 'test' }],
+    skills: registry.getDefs(),
+    publicKeys: [{ kid: 'key-1', key: Buffer.from(kp.publicKey).toString('base64'), active: true }],
+    rateLimit: { requestsPerMinute: 60, requestsPerSender: 100 }, cardTTL: 300,
+  })
+  const knownPeers = new Map<string, Uint8Array>([['agent://testagent.com', kp.publicKey], ...extraPeers])
+  const server = buildServer({
+    card, registry, keypair: kp,
+    taskStore: new TaskStore(3600_000),
+    rateLimiter: new RateLimiter(card.rateLimit),
+    nonceStore: new NonceStore(5 * 60_000),
+    introText: '# Test Agent',
+    knownPeers,
+  })
+  await server.ready()
+  return { server, kp }
+}
+
 async function makeServerWithClassifier(injectionClassifier: InjectionClassifier) {
   const kp = await generateKeypair('key-1')
   const registry = new SkillRegistry()
@@ -241,6 +278,114 @@ describe('injectionClassifier', () => {
     const envelope = makeEnvelope({ payload: { text: 'check me' } })
     await signedInject(server, '/agent/message', envelope, kp)
     expect(capturedPayload).toEqual({ text: 'check me' })
+    await server.close()
+  })
+})
+
+// ── Critical 2: Delegation token verification ────────────────────────────────
+describe('delegation token enforcement', () => {
+  it('rejects malformed delegation token', async () => {
+    const { server, kp } = await makeServerWithPeers(new Map())
+    const envelope = makeEnvelope({ delegationToken: 'not.a.valid.jwt' })
+    const res = await signedInject(server, '/agent/message', envelope, kp)
+    expect(res.statusCode).toBe(401)
+    expect(JSON.parse(res.body).error.code).toBe('AUTH_FAILED')
+    await server.close()
+  })
+
+  it('rejects delegation token from unknown issuer', async () => {
+    const unknownKp = await generateKeypair('unknown-key')
+    const token = await createDelegationToken({
+      issuer: 'agent://unknown-issuer.com',  // not in knownPeers
+      subject: 'agent://testagent.com',
+      scope: ['echo'],
+      maxDepth: 1,
+      expiresInSeconds: 300,
+      privateKey: unknownKp.privateKey,
+    })
+    const { server, kp } = await makeServerWithPeers(new Map())
+    const envelope = makeEnvelope({ delegationToken: token })
+    const res = await signedInject(server, '/agent/message', envelope, kp)
+    expect(res.statusCode).toBe(401)
+    expect(JSON.parse(res.body).error.code).toBe('AUTH_FAILED')
+    await server.close()
+  })
+
+  it('accepts valid delegation token from known issuer', async () => {
+    const issuerKp = await generateKeypair('issuer-key')
+    const token = await createDelegationToken({
+      issuer: 'agent://issuer.com',
+      subject: 'agent://testagent.com',
+      scope: ['echo'],
+      maxDepth: 1,
+      expiresInSeconds: 300,
+      privateKey: issuerKp.privateKey,
+    })
+    const { server, kp } = await makeServerWithPeers(
+      new Map([['agent://issuer.com', issuerKp.publicKey]])
+    )
+    const envelope = makeEnvelope({ delegationToken: token })
+    const res = await signedInject(server, '/agent/message', envelope, kp)
+    expect(res.statusCode).toBe(200)
+    await server.close()
+  })
+})
+
+// ── Critical 3 / Important 8: Trust tier enforcement ────────────────────────
+describe('trust tier enforcement', () => {
+  it('rejects authenticated skill request missing bearer token', async () => {
+    const { server, kp } = await makeServerWithPeers(new Map(), (registry) => {
+      registry.register('secret', {
+        name: 'Secret', description: 'Needs auth',
+        input: z.object({ q: z.string() }),
+        output: z.object({ a: z.string() }),
+        modes: ['sync'], trust: 'authenticated',
+        handler: async () => ({ a: 'ok' }),
+      })
+    })
+    const envelope = makeEnvelope({ skill: 'secret', payload: { q: 'hi' } })
+    const res = await signedInject(server, '/agent/message', envelope, kp)
+    expect(res.statusCode).toBe(401)
+    expect(JSON.parse(res.body).error.code).toBe('AUTH_FAILED')
+    await server.close()
+  })
+
+  it('rejects trusted-peers skill request from unlisted sender', async () => {
+    const { server, kp } = await makeServerWithPeers(new Map(), (registry) => {
+      registry.register('admin', {
+        name: 'Admin', description: 'Trusted only',
+        input: z.object({ cmd: z.string() }),
+        output: z.object({ done: z.boolean() }),
+        modes: ['sync'],
+        trust: 'trusted-peers',
+        allowedPeers: ['agent://other-trusted.com'],
+        handler: async () => ({ done: true }),
+      })
+    })
+    // agent://testagent.com is NOT in allowedPeers
+    const envelope = makeEnvelope({ skill: 'admin', payload: { cmd: 'run' } })
+    const res = await signedInject(server, '/agent/message', envelope, kp)
+    expect(res.statusCode).toBe(401)
+    expect(JSON.parse(res.body).error.code).toBe('AUTH_FAILED')
+    await server.close()
+  })
+
+  it('rejects call to non-existent skill with SKILL_NOT_FOUND before trust checks run', async () => {
+    const { server, kp } = await makeServerWithPeers(new Map(), (registry) => {
+      registry.register('admin', {
+        name: 'Admin', description: 'Trusted only',
+        input: z.object({ cmd: z.string() }),
+        output: z.object({ done: z.boolean() }),
+        modes: ['sync'],
+        trust: 'trusted-peers',
+        allowedPeers: ['agent://other-trusted.com'],
+        handler: async () => ({ done: true }),
+      })
+    })
+    const envelope = makeEnvelope({ skill: 'nonexistent', payload: { cmd: 'run' } })
+    const res = await signedInject(server, '/agent/message', envelope, kp)
+    expect(res.statusCode).toBe(404)
+    expect(JSON.parse(res.body).error.code).toBe('SKILL_NOT_FOUND')
     await server.close()
   })
 })

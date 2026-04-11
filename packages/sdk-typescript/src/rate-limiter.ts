@@ -10,6 +10,7 @@ interface SenderState {
 
 export class RateLimiter {
   private senders = new Map<string, SenderState>()
+  private globalTimestamps: number[] = []  // timestamps across all senders
 
   constructor(private config: RateLimit) {}
 
@@ -31,16 +32,23 @@ export class RateLimiter {
         `Daily token budget of ${this.config.tokensPerSenderPerDay} exceeded`)
     }
 
-    // Sliding window: keep only timestamps within last 60 seconds
     const windowStart = now - 60_000
-    state.requestTimestamps = state.requestTimestamps.filter(t => t > windowStart)
 
-    // Per-sender rate limit
+    // Global rate limit (requestsPerMinute across all senders)
+    this.globalTimestamps = this.globalTimestamps.filter(t => t > windowStart)
+    if (this.globalTimestamps.length >= this.config.requestsPerMinute) {
+      throw new SamvadError(ErrorCode.RATE_LIMITED,
+        `Global rate limit of ${this.config.requestsPerMinute} requests/minute exceeded`)
+    }
+
+    // Per-sender rate limit (sliding window)
+    state.requestTimestamps = state.requestTimestamps.filter(t => t > windowStart)
     if (state.requestTimestamps.length >= this.config.requestsPerSender) {
       throw new SamvadError(ErrorCode.RATE_LIMITED,
         `Rate limit of ${this.config.requestsPerSender} requests/minute exceeded`)
     }
 
+    this.globalTimestamps.push(now)
     state.requestTimestamps.push(now)
   }
 

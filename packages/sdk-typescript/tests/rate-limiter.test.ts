@@ -29,4 +29,23 @@ describe('RateLimiter', () => {
     rl.recordTokens('agent://a.com', 999999)
     expect(() => rl.check('agent://a.com')).not.toThrow()
   })
+
+  it('throws RATE_LIMITED when global requestsPerMinute exceeded across different senders', () => {
+    const rl = new RateLimiter({ requestsPerMinute: 3, requestsPerSender: 100 })
+    rl.check('agent://a.com')
+    rl.check('agent://b.com')
+    rl.check('agent://c.com')
+    expect(() => rl.check('agent://d.com'))
+      .toThrow(expect.objectContaining({ code: ErrorCode.RATE_LIMITED }))
+  })
+
+  it('does not count global requests outside the 60-second window', () => {
+    const rl = new RateLimiter({ requestsPerMinute: 2, requestsPerSender: 100 })
+    rl.check('agent://a.com')
+    rl.check('agent://b.com')
+    // The two requests above are both fresh — limit reached.
+    // A third from a new sender should be blocked.
+    expect(() => rl.check('agent://c.com'))
+      .toThrow(expect.objectContaining({ code: ErrorCode.RATE_LIMITED }))
+  })
 })
