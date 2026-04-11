@@ -34,9 +34,9 @@ Trust tier enforcement happens after signature verification — a forged sender 
 Every payload is validated against the skill's JSON Schema before the handler runs. Unknown fields are stripped. `maxLength` declarations are enforced.
 
 <Warning>
-The built-in injection scanner (`injection-scanner.ts`) is a **regex first-pass only**. OWASP GenAI Security research shows adaptive attacks bypass regex-based detectors with over 90% success. It's a speed bump, not a safety proof.
+The built-in injection scanner is a **regex first-pass only**. OWASP GenAI Security research shows adaptive attacks bypass regex-based detectors with over 90% success. It's a speed bump, not a safety proof.
 
-For high-trust skills: layer in an LLM-based classifier (LLM Guard, Guardrails AI), apply least-privilege to whatever the handler touches, and always wrap peer input in an untrusted-input boundary before it enters an LLM context.
+For high-trust skills: wire in an LLM-based classifier via `injectionClassifier` in `AgentConfig` (OpenAI, Ollama, LLM Guard — [see how](/sdk/building-agents#injection-defense)), apply least-privilege to whatever the handler touches, and always wrap peer input in an untrusted-input boundary before it enters an LLM context.
 </Warning>
 
 <Note>

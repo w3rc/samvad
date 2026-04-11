@@ -46,6 +46,8 @@ This ordering is deliberate; reordering these steps (e.g. scanning before verify
 
 **Error model (`errors.ts`):** All protocol errors throw `SamvadError` with a code from `ErrorCode`. `server.ts#statusCodeFor` maps codes to HTTP (429 for rate/budget, 404 for missing skill, 401 for auth/replay, 400 for other protocol errors, 500 for uncaught).
 
+**Injection defense (`injection-scanner.ts`):** `scanObjectForInjection` runs the built-in regex list. Optionally, pass `injectionClassifier` in `AgentConfig` to add an async LLM-based second layer — the classifier receives the validated payload and returns `true` (reject) / `false` (pass) / throws (fail-open, warning logged). `wrapWithContentBoundary(text)` wraps untrusted string content with a delimiter before forwarding it to an LLM.
+
 ## Conventions
 
 - **Keys are secrets.** `.samvad/` is gitignored; never commit anything under it. Key files are Ed25519 private keys.
