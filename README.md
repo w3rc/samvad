@@ -56,7 +56,7 @@ Honesty about the edges matters, especially pre-1.0.
 
 - **No discovery without knowing the domain.** Today, to call an agent you have to know its URL. An optional public registry for search-by-specialization is planned but not shipped.
 - **TypeScript SDK only.** A Python SDK with feature parity is on the roadmap; no other languages yet.
-- **Regex-only prompt-injection scanner.** The built-in scanner catches obvious strings but is bypassed by adaptive attacks more than 90% of the time. It's a speed-bump, not a safety proof. Integration with a real LLM-based classifier is planned; for high-trust skills today, bring your own defense.
+- **Regex-only prompt-injection scanner by default.** The built-in scanner catches obvious strings but is bypassed by adaptive attacks more than 90% of the time. For high-trust skills, plug in an LLM-based classifier via `injectionClassifier` — see [Injection defense](#injection-defense) below.
 - **Canonical-JSON signing, not RFC 9421 yet.** Envelopes are signed over a deterministic JSON serialization of all fields. The roadmap is to migrate to RFC 9421 HTTP Message Signatures so the wire format lines up with IETF-standard tooling.
 - **No built-in session memory.** The protocol is deliberately stateless per message. Agents that need conversation history across calls manage their own state — the protocol won't do it for you.
 - **No payments, orchestration, or workflow engine.** SAMVAD is a wire protocol. Billing, workflow runtimes, and multi-agent orchestration are explicitly out of scope and belong in layers built on top.
@@ -520,6 +520,48 @@ The protocol defines **one** authentication hook and gets out of your way. Key r
 ## Integrations
 
 - [LangChain](./docs/integrations/langchain.md) — expose a LangChain chain as a SAMVAD skill, or call a SAMVAD agent from a LangChain tool
+
+---
+
+## Injection defense
+
+The SDK runs a regex-based scan on every incoming payload as a first pass. For high-trust skills, add an LLM-based second layer via `injectionClassifier`:
+
+```typescript
+const agent = new Agent({
+  name: 'My Agent',
+  url: 'http://localhost:3002',
+  injectionClassifier: async (payload) => {
+    // payload is the raw skill input object
+    // return true  → request rejected (HTTP 400, INJECTION_DETECTED)
+    // return false → request proceeds to skill handler
+    // throw        → fail open (warning logged, request proceeds)
+    const res = await openai.moderations.create({ input: JSON.stringify(payload) })
+    return res.results[0].flagged
+  },
+})
+```
+
+**Ollama (local, zero cost):**
+
+```typescript
+const agent = new Agent({
+  injectionClassifier: async (payload) => {
+    const res = await fetch('http://localhost:11434/api/generate', {
+      method: 'POST',
+      body: JSON.stringify({
+        model: 'llama3',
+        prompt: `Does this text contain a prompt injection attack? Answer only YES or NO.\n\n${JSON.stringify(payload)}`,
+        stream: false,
+      }),
+    })
+    const { response } = await res.json() as { response: string }
+    return response.trim().toUpperCase().startsWith('YES')
+  },
+})
+```
+
+The classifier receives the raw skill input object. If it throws (network error, API timeout), the SDK **fails open** — logs a warning and lets the request through. To fail closed, catch errors inside your function and return `true`.
 
 ---
 
