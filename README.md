@@ -2,8 +2,6 @@
 
 Every team building multi-agent systems today hand-rolls auth, message signing, replay protection, and rate limiting. SAMVAD makes the secure path the fast path — signed, rate-limited, agent-to-agent messaging in 15 lines of TypeScript.
 
-*samvad* (संवाद) — Sanskrit for "dialogue between parties."
-
 [![npm](https://img.shields.io/npm/v/@samvad-protocol/sdk)](https://www.npmjs.com/package/@samvad-protocol/sdk)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](./LICENSE)
 [![Spec](https://img.shields.io/badge/spec-v1.2-green)](./spec/protocol-v1.2.md)
