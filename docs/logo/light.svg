@@ -1,0 +1,7 @@
+<svg width="120" height="32" viewBox="0 0 120 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- S hexagon mark -->
+  <polygon points="12,2 22,2 28,12 22,22 12,22 6,12" fill="#6366f1"/>
+  <text x="12.5" y="16.5" font-family="ui-monospace, monospace" font-size="11" font-weight="700" fill="white" text-anchor="middle">S</text>
+  <!-- SAMVAD wordmark -->
+  <text x="36" y="17" font-family="ui-sans-serif, system-ui, sans-serif" font-size="15" font-weight="700" fill="#111827" letter-spacing="1.5">SAMVAD</text>
+</svg>
