@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
 import type { AgentClient } from '@samvad-protocol/sdk'
 import { z } from 'zod'
 
@@ -36,7 +36,7 @@ export const briefOutputSchema = z.object({
 })
 
 export function buildResearchSkill(mock: boolean, redTeamClient: AgentClient) {
-  const anthropic = mock ? null : new Anthropic()
+  const openai = mock ? null : new OpenAI()
 
   return {
     name: 'Brief',
@@ -53,21 +53,21 @@ export function buildResearchSkill(mock: boolean, redTeamClient: AgentClient) {
       let openQuestions: string[]
       let confidenceScore: number
 
-      if (mock || !anthropic) {
+      if (mock || !openai) {
         keyFacts = MOCK_BRIEF.keyFacts
         openQuestions = MOCK_BRIEF.openQuestions
         confidenceScore = MOCK_BRIEF.confidenceScore
       } else {
-        const message = await anthropic.messages.create({
-          model: 'claude-haiku-4-5-20251001',
+        const completion = await openai.chat.completions.create({
+          model: 'gpt-4o-mini',
           max_tokens: 512,
           messages: [{
             role: 'user',
-            content: `Research the topic: "${topic}"\n\nReturn a structured briefing with exactly:\n- 3 key facts (concrete, specific, cited where possible)\n- 2 open questions that remain unresolved\n- A confidence score 0-100 for the overall briefing\n\nFormat as JSON:\n{\n  "keyFacts": ["...", "...", "..."],\n  "openQuestions": ["...", "..."],\n  "confidenceScore": 75\n}\nReturn ONLY the JSON object. No preamble.`,
+            content: `Research the topic: "${topic}"\n\nReturn a structured briefing with exactly:\n- 3 key facts (concrete, specific)\n- 2 open questions that remain unresolved\n- A confidence score 0-100\n\nFormat as JSON:\n{\n  "keyFacts": ["...", "...", "..."],\n  "openQuestions": ["...", "..."],\n  "confidenceScore": 75\n}\nReturn ONLY the JSON object. No preamble.`,
           }],
         })
 
-        const text = message.content[0].type === 'text' ? message.content[0].text : ''
+        const text = completion.choices[0]?.message?.content ?? ''
         try {
           const parsed = JSON.parse(text)
           keyFacts = Array.isArray(parsed.keyFacts) ? parsed.keyFacts.slice(0, 3) : MOCK_BRIEF.keyFacts
