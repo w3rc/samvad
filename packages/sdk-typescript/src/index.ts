@@ -1,4 +1,4 @@
-// Public API surface of @samvad/sdk
+// Public API surface of @samvad-protocol/sdk
 export { Agent } from './agent.js'
 export type { AgentConfig, AgentSkillOptions, ServeOptions } from './agent.js'
 

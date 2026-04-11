@@ -73,13 +73,13 @@ If any of the "not yet" items are blockers for your use case, they're all good p
 Install the SDK and build a working agent in under a minute.
 
 ```bash
-npm install @samvad/sdk zod
+npm install @samvad-protocol/sdk zod
 ```
 
 **`hello-agent.ts`**
 
 ```typescript
-import { Agent } from '@samvad/sdk'
+import { Agent } from '@samvad-protocol/sdk'
 import { z } from 'zod'
 
 const agent = new Agent({
@@ -122,7 +122,7 @@ Run it with `tsx hello-agent.ts`. On first run the SDK generates an Ed25519 keyp
 Call it from another agent:
 
 ```typescript
-import { AgentClient } from '@samvad/sdk'
+import { AgentClient } from '@samvad-protocol/sdk'
 
 const client = await AgentClient.from('http://localhost:3002')
 const result = await client.call('greet', { name: 'Ada', language: 'en' })
@@ -319,12 +319,12 @@ SAMVAD enforces eight layers of defense — all automatic in the SDK.
 
 ## TypeScript SDK
 
-Package: **`@samvad/sdk`**. ESM-only, Node 20+, depends on `fastify`, `zod`, `@noble/ed25519`, and `jose`.
+Package: **`@samvad-protocol/sdk`**. ESM-only, Node 20+, depends on `fastify`, `zod`, `@noble/ed25519`, and `jose`.
 
 ### Building an agent
 
 ```typescript
-import { Agent } from '@samvad/sdk'
+import { Agent } from '@samvad-protocol/sdk'
 import { z } from 'zod'
 
 const agent = new Agent({
@@ -374,7 +374,7 @@ On first `serve()` the SDK generates and persists an Ed25519 keypair under `.sam
 ### Calling another agent
 
 ```typescript
-import { AgentClient } from '@samvad/sdk'
+import { AgentClient } from '@samvad-protocol/sdk'
 
 // Fetches the remote agent card and builds a typed client
 const client = await AgentClient.from('https://other-agent.com')
@@ -417,7 +417,7 @@ const result = await client.call('internal-skill', { … })
 When agent A asks agent B to act on its behalf, agent A mints a JWT delegation token and includes it in the envelope:
 
 ```typescript
-import { createDelegationToken, verifyDelegationToken } from '@samvad/sdk'
+import { createDelegationToken, verifyDelegationToken } from '@samvad-protocol/sdk'
 
 const token = await createDelegationToken({
   issuer: 'agent://a.com',
@@ -480,7 +480,7 @@ The protocol defines **one** authentication hook and gets out of your way. Key r
 ```
 samvad/
 ├── packages/
-│   └── sdk-typescript/       # @samvad/sdk — TypeScript SDK
+│   └── sdk-typescript/       # @samvad-protocol/sdk — TypeScript SDK
 │       ├── src/
 │       │   ├── agent.ts           # Agent class (server builder)
 │       │   ├── agent-client.ts    # AgentClient (calling other agents)
@@ -514,10 +514,10 @@ npm install
 npm test --workspaces
 
 # Run just the SDK tests
-npm test -w @samvad/sdk
+npm test -w @samvad-protocol/sdk
 
 # Run a single test file
-npx vitest run tests/signing.test.ts -w @samvad/sdk
+npx vitest run tests/signing.test.ts -w @samvad-protocol/sdk
 
 # Build all workspaces
 npm run build --workspaces

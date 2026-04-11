@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-SAMVAD — **S**ecure **A**gent **M**essaging, **V**erification **A**nd **D**iscovery. Tagline: *The Open Sovereign Agent Dialogue Protocol*. The name is also the Sanskrit word (संवाद) for "dialogue between parties." An agent-to-agent protocol with a reference TypeScript SDK. npm workspaces monorepo: `packages/sdk-typescript` (the SDK, published as `@samvad/sdk`) and `examples/basic-agent-ts` (runnable demo).
+SAMVAD — **S**ecure **A**gent **M**essaging, **V**erification **A**nd **D**iscovery. Tagline: *The Open Sovereign Agent Dialogue Protocol*. The name is also the Sanskrit word (संवाद) for "dialogue between parties." An agent-to-agent protocol with a reference TypeScript SDK. npm workspaces monorepo: `packages/sdk-typescript` (the SDK, published as `@samvad-protocol/sdk`) and `examples/basic-agent-ts` (runnable demo).
 
 ## Commands
 
@@ -12,9 +12,9 @@ All commands run from the repo root unless noted.
 
 - `npm test --workspaces` — run all workspace tests (Vitest)
 - `npm run build --workspaces` — build all workspaces (tsc)
-- `npm test -w @samvad/sdk` — run just the SDK test suite
-- `npx vitest run tests/signing.test.ts -w @samvad/sdk` — run a single test file
-- `npx vitest -w @samvad/sdk` — watch mode for the SDK
+- `npm test -w @samvad-protocol/sdk` — run just the SDK test suite
+- `npx vitest run tests/signing.test.ts -w @samvad-protocol/sdk` — run a single test file
+- `npx vitest -w @samvad-protocol/sdk` — watch mode for the SDK
 - `npm start -w basic-agent-ts` — run the example agent on port 3002 (uses `tsx`)
 
 The SDK is ESM-only (`"type": "module"`, `module: NodeNext`). Internal imports must use the `.js` extension even when importing `.ts` sources (e.g. `import { Agent } from './agent.js'`). `tsc` emits to `dist/`; tests run against `src/` directly via Vitest.

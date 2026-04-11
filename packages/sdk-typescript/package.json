@@ -1,13 +1,55 @@
 {
-  "name": "@samvad/sdk",
+  "name": "@samvad-protocol/sdk",
   "version": "0.1.0",
   "description": "TypeScript SDK for SAMVAD — Secure Agent Messaging, Verification And Discovery (The Open Sovereign Agent Dialogue Protocol)",
   "license": "Apache-2.0",
+  "author": "The SAMVAD Authors",
+  "homepage": "https://github.com/w3rc/samvad#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/w3rc/samvad.git",
+    "directory": "packages/sdk-typescript"
+  },
+  "bugs": {
+    "url": "https://github.com/w3rc/samvad/issues"
+  },
+  "keywords": [
+    "agent",
+    "a2a",
+    "protocol",
+    "samvad",
+    "ai",
+    "llm",
+    "multi-agent",
+    "ed25519",
+    "signing",
+    "sdk"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build && cp ../../LICENSE ../../NOTICE ../../README.md .",
+    "postpublish": "rm -f LICENSE NOTICE README.md",
     "test": "vitest run",
     "test:watch": "vitest"
   },

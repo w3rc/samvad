@@ -1,4 +1,4 @@
-import { Agent } from '@samvad/sdk'
+import { Agent } from '@samvad-protocol/sdk'
 import { z } from 'zod'
 
 const agent = new Agent({
