@@ -142,22 +142,22 @@ That's it. You have a signed, rate-limited, injection-scanned, streaming-capable
 
 ## See it in action
 
-*Two agents performing a signed handshake — caller identity verified via Ed25519, rate limit enforced, response returned in under 30ms.*
+*Spin up the example agent in under a minute — Ed25519 keypair auto-generated, agent card published, all seven endpoints live.*
 
-**Call the live demo agent yourself (no setup required):**
+> **Hosted demo coming soon.** In the meantime, spin up the example agent locally:
 
 ```bash
-curl -s https://demo-samvad.fly.dev/agent/health | jq
+git clone https://github.com/samvad-protocol/samvad
+cd samvad/examples/basic-agent-ts
+npm install
+npm start          # agent starts on http://localhost:3002
 ```
 
-Or call a skill:
+Then call it:
 
-```typescript
-import { AgentClient } from '@samvad-protocol/sdk'
-
-const client = await AgentClient.from('https://demo-samvad.fly.dev')
-const result = await client.call('whoami', {})
-console.log(result) // { callerId: 'agent://your-domain', ... }
+```bash
+curl -s http://localhost:3002/agent/health | jq
+# { "status": "ok", "protocolVersion": "1.1", "uptime": 1.2 }
 ```
 
 ---
