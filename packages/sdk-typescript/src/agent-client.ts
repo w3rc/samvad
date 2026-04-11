@@ -162,7 +162,10 @@ export class AgentClient {
       for (const line of lines) {
         if (line.startsWith('data: ')) {
           const data = JSON.parse(line.slice(6))
-          if (data.done) return
+          if (data.done) {
+            if (data.error) throw new SamvadError(data.error.code as ErrorCodeType, data.error.message)
+            return
+          }
           yield data.chunk
         }
       }

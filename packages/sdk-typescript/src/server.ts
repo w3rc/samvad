@@ -125,7 +125,11 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
       if (!issuerKey) {
         throw new SamvadError(ErrorCode.AUTH_FAILED, `Unknown delegation token issuer: ${issuer}`)
       }
-      await verifyDelegationToken(envelope.delegationToken, issuerKey)
+      const claims = await verifyDelegationToken(envelope.delegationToken, issuerKey)
+      if (!claims.scope.includes(envelope.skill)) {
+        throw new SamvadError(ErrorCode.DELEGATION_EXCEEDED,
+          `Delegation token scope does not include skill '${envelope.skill}'`)
+      }
     }
 
     // 5. Injection scan — regex first pass (fast, free), then optional LLM classifier
@@ -141,7 +145,9 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
       } catch (err) {
         if (err instanceof SamvadError) throw err
         // Classifier threw (network error, API down, etc.) — fail open
-        app.log.warn({ err }, 'injectionClassifier threw — failing open')
+        // app.log is pino with logger:false → level 'silent', so fall back to console
+        const msg = `[SAMVAD] injectionClassifier threw — failing open: ${(err as Error).message}`
+        if (app.log.level !== 'silent') { app.log.warn({ err }, msg) } else { console.warn(msg) }
       }
     }
 
@@ -199,6 +205,22 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   app.post<{ Body: MessageEnvelope & { callbackUrl?: string } }>('/agent/task', async (req, reply) => {
     const env = req.body
     const spanId = randomUUID()
+
+    // Validate callbackUrl before doing any work — prevents SSRF via internal URLs
+    if (env.callbackUrl !== undefined) {
+      let parsedCallback: URL
+      try {
+        parsedCallback = new URL(env.callbackUrl)
+      } catch {
+        reply.status(400)
+        return errorResponse(new SamvadError(ErrorCode.SCHEMA_INVALID, 'callbackUrl is not a valid URL'), env.traceId, spanId)
+      }
+      if (parsedCallback.protocol !== 'https:') {
+        reply.status(400)
+        return errorResponse(new SamvadError(ErrorCode.SCHEMA_INVALID, 'callbackUrl must use https'), env.traceId, spanId)
+      }
+    }
+
     try {
       await verifyIncoming(req, env)
     } catch (err) {

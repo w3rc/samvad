@@ -31,4 +31,16 @@ describe('NonceStore', () => {
     const result = store.check('nonce-1', ts)
     expect(result).toBe('replay')
   })
+
+  it('rejects a message with a far-future timestamp', () => {
+    const future = new Date(Date.now() + 2 * 60 * 1000).toISOString() // 2 minutes ahead
+    const result = store.check('nonce-future', future)
+    expect(result).toBe('expired')
+  })
+
+  it('accepts a message within the allowed clock skew', () => {
+    const slightlyFuture = new Date(Date.now() + 30 * 1000).toISOString() // 30s ahead
+    const result = store.check('nonce-skew', slightlyFuture)
+    expect(result).toBe('ok')
+  })
 })

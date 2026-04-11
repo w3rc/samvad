@@ -355,7 +355,7 @@ SAMVAD enforces eight layers of defense — all automatic in the SDK.
 7. **Delegation scope + depth (EdDSA JWT).** When agent A delegates to agent B, a JWT in `delegationToken` carries `scope`, `maxDepth`, and an RFC 8693-style `act` claim for chained delegation. Each hop verifies, enforces the scope, decrements the depth, and stops runaway agent graphs before they start.
 8. **Audit trail (OpenTelemetry-compatible).** Every envelope carries `traceId`, `spanId`, and `parentSpanId`, so the full call tree of a multi-agent conversation is reconstructible from any participant's logs.
 
-> **A note on prompt injection.** The SDK ships a regex first-pass scanner for obvious injection strings. OWASP GenAI Security research shows regex-based detectors are bypassed by adaptive attacks more than 90% of the time, so the scanner is a useful speed-bump, not a safety proof. For high-trust skills, layer in a real classifier (LLM Guard, Guardrails AI), apply the principle of least privilege to whatever the handler touches, and always wrap external text in an untrusted-input boundary before it enters an LLM context. Integration with a proper classifier is on the roadmap.
+> **A note on prompt injection.** The SDK ships a regex first-pass scanner for obvious injection strings. OWASP GenAI Security research shows regex-based detectors are bypassed by adaptive attacks more than 90% of the time, so the scanner is a useful speed-bump, not a safety proof. For high-trust skills, plug in an LLM-based classifier via `injectionClassifier` in `AgentConfig` — see [Injection defense](#injection-defense) — and always wrap external text in an untrusted-input boundary before it enters an LLM context.
 
 ---
 
@@ -639,7 +639,7 @@ Planned, not yet shipped:
 - **Python SDK** (`samvad`) with feature parity
 - **Optional public registry** for agent discovery by specialization, model, and capability
 - **RFC 9421 HTTP Message Signatures** as the wire-format for signing, so SDKs can share verified IETF-standard implementations
-- **LLM-based injection classifier** integration (LLM Guard / Guardrails AI) as an opt-in second layer
+- **Built-in LLM classifier adapters** (LLM Guard, Guardrails AI) — the `injectionClassifier` hook is already shipped; provider-specific adapters remain out of scope
 - **Formal spec repository** with language-agnostic protocol documents
 
 Want to help? See [contributing](#contributing).

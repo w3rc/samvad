@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { Agent } from '../src/agent.js'
 import { AgentClient } from '../src/agent-client.js'
+import { SamvadError } from '../src/errors.js'
 import { z } from 'zod'
 import { rmSync, existsSync } from 'node:fs'
 import type { FastifyInstance } from 'fastify'
@@ -65,5 +66,42 @@ describe('AgentClient end-to-end', () => {
   it('calls a skill with taskAndPoll (async + polling)', async () => {
     const result = await client.taskAndPoll('add', { a: 10, b: 20 })
     expect(result).toEqual({ sum: 30 })
+  })
+})
+
+const STREAM_AGENT_KEYS_DIR = '/tmp/samvad-e2e-stream-keys'
+
+describe('AgentClient stream error propagation', () => {
+  let streamServer: FastifyInstance
+  let streamClient: AgentClient
+
+  beforeAll(async () => {
+    if (existsSync(STREAM_AGENT_KEYS_DIR)) rmSync(STREAM_AGENT_KEYS_DIR, { recursive: true })
+
+    streamClient = await AgentClient.prepare({ keysDir: CLIENT_KEYS_DIR, agentId: 'agent://client.local' })
+
+    const agent = new Agent({ name: 'Stream Test Agent', url: 'http://localhost:4446', keysDir: STREAM_AGENT_KEYS_DIR })
+    agent.skill('fail-stream', {
+      name: 'FailStream', description: 'Always fails',
+      input: z.object({}),
+      output: z.object({}),
+      modes: ['stream'],
+      trust: 'public',
+      handler: async () => { throw new SamvadError('AGENT_UNAVAILABLE' as const, 'deliberate stream failure') },
+    })
+    agent.trustPeer('agent://client.local', streamClient.publicKey)
+    streamServer = await agent.serve({ port: 4446 })
+    await streamClient.connect('http://localhost:4446')
+  })
+
+  afterAll(async () => {
+    await streamServer.close()
+    if (existsSync(STREAM_AGENT_KEYS_DIR)) rmSync(STREAM_AGENT_KEYS_DIR, { recursive: true })
+  })
+
+  it('stream generator throws SamvadError when skill handler fails', async () => {
+    await expect(async () => {
+      for await (const _ of streamClient.stream('fail-stream', {})) { /* consume */ }
+    }).rejects.toBeInstanceOf(SamvadError)
   })
 })

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { randomUUID } from 'node:crypto'
 import { buildServer } from '../src/server.js'
 import { SkillRegistry } from '../src/skill-registry.js'
 import { TaskStore } from '../src/task-store.js'
@@ -70,7 +71,7 @@ function makeEnvelope(overrides: Partial<MessageEnvelope> = {}): MessageEnvelope
     to: 'agent://testagent.com',
     skill: 'echo',
     mode: 'sync',
-    nonce: Math.random().toString(36),
+    nonce: randomUUID(),
     timestamp: new Date().toISOString(),
     traceId: 'trace-1',
     spanId: 'span-1',
@@ -282,6 +283,79 @@ describe('injectionClassifier', () => {
   })
 })
 
+// ── Important 7: callbackUrl SSRF ────────────────────────────────────────────
+describe('callbackUrl validation', () => {
+  let server: FastifyInstance
+  let kp: Awaited<ReturnType<typeof generateKeypair>>
+  beforeEach(async () => { ({ server, kp } = await makeServer()) })
+  afterEach(async () => { await server.close() })
+
+  it('rejects non-https callbackUrl', async () => {
+    const envelope = { ...makeEnvelope({ mode: 'async', payload: { text: 'test' } }), callbackUrl: 'http://internal-service/callback' }
+    const res = await signedInject(server, '/agent/task', envelope, kp)
+    expect(res.statusCode).toBe(400)
+  })
+
+  it('rejects invalid callbackUrl', async () => {
+    const envelope = { ...makeEnvelope({ mode: 'async', payload: { text: 'test' } }), callbackUrl: 'not-a-url' }
+    const res = await signedInject(server, '/agent/task', envelope, kp)
+    expect(res.statusCode).toBe(400)
+  })
+
+  it('accepts https callbackUrl', async () => {
+    const envelope = { ...makeEnvelope({ mode: 'async', payload: { text: 'test' } }), callbackUrl: 'https://my-service.com/callback' }
+    const res = await signedInject(server, '/agent/task', envelope, kp)
+    expect(res.statusCode).toBe(202)
+  })
+})
+
+// ── Important 9: Rate limit → HTTP 429 ──────────────────────────────────────
+describe('rate limit integration', () => {
+  it('returns 429 when per-sender rate limit is exceeded', async () => {
+    const kp = await generateKeypair('rl-key')
+    const registry = new SkillRegistry()
+    registry.register('echo', {
+      name: 'Echo', description: 'Echoes input',
+      input: z.object({ text: z.string() }),
+      output: z.object({ echo: z.string() }),
+      modes: ['sync'], trust: 'public',
+      handler: async (input) => ({ echo: (input as { text: string }).text }),
+    })
+    const card = buildAgentCard({
+      name: 'RL Agent', version: '1.0.0', description: 'Test',
+      url: 'https://rlagent.com', specializations: [],
+      models: [{ provider: 'test', model: 'test' }],
+      skills: registry.getDefs(),
+      publicKeys: [{ kid: 'rl-key', key: Buffer.from(kp.publicKey).toString('base64'), active: true }],
+      rateLimit: { requestsPerMinute: 100, requestsPerSender: 2 }, cardTTL: 300,
+    })
+    const server = buildServer({
+      card, registry, keypair: kp,
+      taskStore: new TaskStore(3600_000),
+      rateLimiter: new RateLimiter(card.rateLimit),
+      nonceStore: new NonceStore(5 * 60_000),
+      introText: '# RL Agent',
+      knownPeers: new Map([['agent://rlagent.com', kp.publicKey]]),
+    })
+    await server.ready()
+
+    const makeRLEnvelope = (overrides: Partial<MessageEnvelope> = {}): MessageEnvelope => ({
+      from: 'agent://rlagent.com', to: 'agent://rlagent.com',
+      skill: 'echo', mode: 'sync',
+      nonce: randomUUID(), timestamp: new Date().toISOString(),
+      traceId: 'trace-rl', spanId: 'span-rl',
+      payload: { text: 'hi' }, ...overrides,
+    })
+
+    await signedInject(server, '/agent/message', makeRLEnvelope(), kp)
+    await signedInject(server, '/agent/message', makeRLEnvelope(), kp)
+    const res = await signedInject(server, '/agent/message', makeRLEnvelope(), kp)
+    expect(res.statusCode).toBe(429)
+    expect(JSON.parse(res.body).error.code).toBe('RATE_LIMITED')
+    await server.close()
+  })
+})
+
 // ── Critical 2: Delegation token verification ────────────────────────────────
 describe('delegation token enforcement', () => {
   it('rejects malformed delegation token', async () => {
@@ -308,6 +382,26 @@ describe('delegation token enforcement', () => {
     const res = await signedInject(server, '/agent/message', envelope, kp)
     expect(res.statusCode).toBe(401)
     expect(JSON.parse(res.body).error.code).toBe('AUTH_FAILED')
+    await server.close()
+  })
+
+  it('rejects delegation token whose scope excludes the called skill', async () => {
+    const issuerKp = await generateKeypair('issuer-scope-key')
+    const token = await createDelegationToken({
+      issuer: 'agent://issuer.com',
+      subject: 'agent://testagent.com',
+      scope: ['other-skill'],  // does NOT include 'echo'
+      maxDepth: 1,
+      expiresInSeconds: 300,
+      privateKey: issuerKp.privateKey,
+    })
+    const { server, kp } = await makeServerWithPeers(
+      new Map([['agent://issuer.com', issuerKp.publicKey]])
+    )
+    const envelope = makeEnvelope({ delegationToken: token })  // calls 'echo'
+    const res = await signedInject(server, '/agent/message', envelope, kp)
+    expect(res.statusCode).toBe(400)
+    expect(JSON.parse(res.body).error.code).toBe('DELEGATION_EXCEEDED')
     await server.close()
   })
 
