@@ -504,6 +504,12 @@ The protocol defines **one** authentication hook and gets out of your way. Key r
 
 ---
 
+## Integrations
+
+- [LangChain](./docs/integrations/langchain.md) — expose a LangChain chain as a SAMVAD skill, or call a SAMVAD agent from a LangChain tool
+
+---
+
 ## Repository layout
 
 ```
