@@ -1,8 +1,6 @@
-# LangChain Integration
+# SAMVAD + LangChain Integration
 
-## Overview
-
-LangChain handles LLM orchestration — chains, memory, tools, and agents. SAMVAD handles agent-to-agent communication — signed envelopes, identity, rate limiting, and discovery. The two complement each other naturally: a LangChain chain becomes a callable SAMVAD skill, and a remote SAMVAD agent becomes a LangChain tool that any chain or agent executor can invoke.
+SAMVAD handles agent-to-agent communication; LangChain handles LLM orchestration. The two complement each other cleanly: expose a LangChain chain as a SAMVAD skill so other agents can call it, or call a remote SAMVAD agent from a LangChain tool.
 
 ---
 
@@ -11,137 +9,113 @@ LangChain handles LLM orchestration — chains, memory, tools, and agents. SAMVA
 Install dependencies:
 
 ```bash
-npm install @samvad-protocol/sdk langchain @langchain/openai zod
+npm install @samvad-protocol/sdk @langchain/openai @langchain/core zod
 ```
 
-Create a SAMVAD agent whose `summarize` skill runs a LangChain summarization chain inside the handler:
+Create an agent that wraps a summarization chain as a public SAMVAD skill:
 
 ```typescript
+// summarizer-agent.ts
 import { Agent } from '@samvad-protocol/sdk'
-import { z } from 'zod'
 import { ChatOpenAI } from '@langchain/openai'
-import { PromptTemplate } from 'langchain/prompts'
-import { LLMChain } from 'langchain/chains'
+import { PromptTemplate } from '@langchain/core/prompts'
+import { StringOutputParser } from '@langchain/core/output_parsers'
+import { z } from 'zod'
 
-const model = new ChatOpenAI({ modelName: 'gpt-4o-mini', temperature: 0 })
-
+const model = new ChatOpenAI({ model: 'gpt-4o-mini' })
 const prompt = PromptTemplate.fromTemplate(
-  'Summarize the following text in two sentences:\n\n{text}'
+  'Summarise the following text in 2–3 sentences:\n\n{text}'
 )
-
-const chain = new LLMChain({ llm: model, prompt })
+const chain = prompt.pipe(model).pipe(new StringOutputParser())
 
 const agent = new Agent({
   name: 'Summarizer Agent',
-  description: 'Summarizes text using a LangChain chain',
-  url: 'http://localhost:3010',
-  specializations: ['summarization'],
+  version: '1.0.0',
+  description: 'Summarises text using GPT-4o-mini via SAMVAD',
+  url: process.env.AGENT_URL ?? 'http://localhost:3000',
 })
 
 agent.skill('summarize', {
   name: 'Summarize',
-  description: 'Accepts up to 10,000 characters of text and returns a two-sentence summary',
+  description: 'Summarises up to 10,000 characters of text',
   input: z.object({ text: z.string().max(10_000) }),
   output: z.object({ summary: z.string() }),
   modes: ['sync'],
   trust: 'public',
   handler: async (input, ctx) => {
-    // ctx.sender is the verified agent:// ID of whoever called this skill.
-    // You can log it, use it for per-caller rate decisions, or pass it
-    // downstream as provenance metadata.
-    console.log(`summarize called by ${ctx.sender} (trace: ${ctx.traceId})`)
-
     const { text } = input as { text: string }
-    const result = await chain.call({ text })
-    return { summary: result.text as string }
+    console.log(`Request from ${ctx.sender} (trace: ${ctx.traceId})`)
+    const summary = await chain.invoke({ text })
+    return { summary }
   },
 })
 
-await agent.serve({ port: 3010 })
-console.log('Summarizer agent listening on http://localhost:3010')
+agent.serve({ port: 3000 })
 ```
 
-Run it:
-
-```bash
-npx tsx summarizer-agent.ts
-```
-
-The agent card is published automatically at `http://localhost:3010/.well-known/agent.json` and the skill is reachable at `POST /agent/message`. Every inbound call is Ed25519-verified, nonce-checked, and schema-validated before the handler runs — no security boilerplate needed.
+Run it with `tsx summarizer-agent.ts`. The SDK generates an Ed25519 keypair on first start and publishes the agent card at `/.well-known/agent.json`.
 
 ---
 
 ## Call a SAMVAD agent from a LangChain tool
 
-Wrap a remote SAMVAD agent as a `DynamicTool` so any LangChain agent executor or chain can invoke it:
+Install dependencies:
+
+```bash
+npm install @samvad-protocol/sdk @langchain/openai @langchain/core langchain zod
+```
+
+Wrap a remote SAMVAD agent as a LangChain tool and wire it into an agent:
 
 ```typescript
+// caller.ts
 import { AgentClient } from '@samvad-protocol/sdk'
-import { DynamicTool } from 'langchain/tools'
 import { ChatOpenAI } from '@langchain/openai'
-import { initializeAgentExecutorWithOptions } from 'langchain/agents'
+import { DynamicTool } from '@langchain/core/tools'
+import { AgentExecutor, createOpenAIFunctionsAgent } from 'langchain/agents'
+import { ChatPromptTemplate } from '@langchain/core/prompts'
 
-// Build the SAMVAD client once — it fetches the remote agent card
-// and generates a local Ed25519 keypair for signing outbound calls.
-const samvadClient = await AgentClient.from('http://localhost:3010')
+const client = await AgentClient.from('http://localhost:3000')
 
 const summarizerTool = new DynamicTool({
-  name: 'samvad_agent',
-  description:
-    'Calls a remote SAMVAD summarizer agent. ' +
-    'Input must be a JSON string with a "text" field containing the text to summarize. ' +
-    'Returns a two-sentence summary.',
-  func: async (input: string) => {
-    const parsed = JSON.parse(input) as { text: string }
-    const result = await samvadClient.call('summarize', parsed)
+  name: 'summarize',
+  description: 'Summarises a long piece of text. Input: the text to summarise.',
+  func: async (text: string) => {
+    const result = await client.call('summarize', { text })
     return JSON.stringify(result)
   },
 })
 
-// Wire the tool into a LangChain agent executor.
-const llm = new ChatOpenAI({ modelName: 'gpt-4o-mini', temperature: 0 })
-const executor = await initializeAgentExecutorWithOptions([summarizerTool], llm, {
-  agentType: 'openai-functions',
-  verbose: true,
-})
+const llm = new ChatOpenAI({ model: 'gpt-4o-mini' })
+const prompt = ChatPromptTemplate.fromMessages([
+  ['system', 'You are a helpful assistant with access to a summarization tool.'],
+  ['human', '{input}'],
+  ['placeholder', '{agent_scratchpad}'],
+])
 
-const response = await executor.call({
-  input: 'Summarize this for me: ' + JSON.stringify({ text: 'Your long article text here...' }),
-})
-console.log(response.output)
+const agentInstance = await createOpenAIFunctionsAgent({ llm, tools: [summarizerTool], prompt })
+const executor = new AgentExecutor({ agent: agentInstance, tools: [summarizerTool] })
+
+const result = await executor.invoke({ input: 'Summarise this article: [paste article here]' })
+console.log(result.output)
 ```
-
-`AgentClient.from()` is async because it fetches the remote agent card on first call to verify the agent's identity and available skills. Reuse a single client instance across multiple tool invocations — do not construct a new client per call.
 
 ---
 
 ## Try it now
 
-Spin up the SAMVAD example agent locally:
+Spin up the example agent locally (no cloud setup needed):
 
 ```bash
 git clone https://github.com/w3rc/samvad
 cd samvad/examples/basic-agent-ts
-npm install && npm start   # runs on http://localhost:3002
+npm install && npm start   # starts on http://localhost:3002
 ```
 
-Then call it from LangChain using the pattern from the section above — just swap the URL and skill ID:
+Then swap `'http://localhost:3000'` in the caller example for `'http://localhost:3002'` and call the `greet` skill:
 
 ```typescript
-const samvadClient = await AgentClient.from('http://localhost:3002')
-
-const greetTool = new DynamicTool({
-  name: 'samvad_agent',
-  description:
-    'Calls a remote SAMVAD greeting agent. ' +
-    'Input must be a JSON string with a "name" field. ' +
-    'Returns a personalised greeting.',
-  func: async (input: string) => {
-    const parsed = JSON.parse(input) as { name: string }
-    const result = await samvadClient.call('greet', parsed)
-    return JSON.stringify(result)
-  },
-})
+const client = await AgentClient.from('http://localhost:3002')
+const result = await client.call('greet', { name: 'Ada', language: 'en' })
+console.log(result) // { greeting: 'Hello, Ada! Welcome to SAMVAD.' }
 ```
-
-From there you can plug `greetTool` into any LangChain agent executor exactly as shown in the previous section.
