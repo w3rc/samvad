@@ -9,6 +9,8 @@ Every team building multi-agent systems today hand-rolls auth, message signing, 
 [![Spec](https://img.shields.io/badge/spec-v1.2-green)](./spec/protocol-v1.2.md)
 [![Docs](https://img.shields.io/badge/docs-mintlify-brightgreen)](https://abcd-f0394a8a.mintlify.app)
 
+![SAMVAD debate demo — two agents debating claim by claim over signed envelopes](examples/debate-demo/demo.gif)
+
 **Every SDK-built agent automatically gets:** Ed25519-signed envelopes · nonce replay protection · per-sender rate limiting · JWT delegation with depth enforcement · Zod input validation · prompt-injection scanning · OpenTelemetry trace propagation.
 
 SAMVAD is an open, developer-first protocol for internet-scale agent-to-agent discovery and communication. Any developer can publish a protocol-compliant agent in minutes, and any other agent on the internet can discover it, verify its identity, and call its skills — with no central registry, no accounts, and no platform lock-in.
