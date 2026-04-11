@@ -2,62 +2,72 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 
-const MOCK_COUNTERARGUMENTS = [
-  'Historical evidence shows this trend regularly reverses under new conditions.',
-  'This ignores the adaptive capacity of workers to shift into adjacent roles.',
-  'The economic incentives here are more complex than a simple cost comparison.',
-  'Short-term data is being extrapolated into a long-term structural claim.',
-  'This assumes current trajectories continue linearly, which rarely holds in practice.',
-]
+const MOCK_RED_TEAM = {
+  assumptionsChallenged: [
+    '"Well-defined tasks" covers roughly 20% of real engineering work — the rest involves ambiguity, stakeholder negotiation, and architectural judgment.',
+    'Productivity gains are measured on greenfield tasks; debugging AI-generated code in production adds hidden cost.',
+  ],
+  gapsIdentified: [
+    'No longitudinal data on AI performance as codebases age and complexity compounds.',
+    'Regulatory constraints in finance, healthcare, and defence create sectors where AI substitution faces hard limits.',
+  ],
+  reliabilityRating: 'medium' as const,
+  verdict: 'Briefing is directionally correct but overstates certainty — treat as a starting hypothesis, not a conclusion.',
+}
 
-export const critiqueInputSchema = z.object({
+export const redTeamInputSchema = z.object({
   topic: z.string().max(200),
-  claims: z.array(z.string().max(300)).min(1).max(5),
+  keyFacts: z.array(z.string()).min(1).max(5),
+  openQuestions: z.array(z.string()).min(0).max(5),
 })
 
-export const critiqueOutputSchema = z.object({
-  counterarguments: z.array(z.string()),
+export const redTeamOutputSchema = z.object({
+  assumptionsChallenged: z.array(z.string()),
+  gapsIdentified: z.array(z.string()),
+  reliabilityRating: z.enum(['high', 'medium', 'low']),
+  verdict: z.string(),
 })
 
-export function buildCriticSkill(mock: boolean) {
+export function buildRedTeamSkill(mock: boolean) {
   const anthropic = mock ? null : new Anthropic()
 
   return {
-    name: 'Critique',
-    description: 'Takes a list of claims and returns a sharp counterargument for each one.',
-    input: critiqueInputSchema,
-    output: critiqueOutputSchema,
+    name: 'Red Team',
+    description: 'Pressure-tests a research briefing — challenges assumptions, identifies gaps, and rates overall reliability.',
+    input: redTeamInputSchema,
+    output: redTeamOutputSchema,
     modes: ['sync'] as const,
     trust: 'public' as const,
     handler: async (input: unknown, ctx: { sender: string; traceId: string; spanId: string }) => {
-      const { topic, claims } = input as { topic: string; claims: string[] }
-      console.log(`[critic] ← ${ctx.sender} | "${topic}" | ${claims.length} claims`)
+      const { topic, keyFacts, openQuestions } = input as {
+        topic: string
+        keyFacts: string[]
+        openQuestions: string[]
+      }
+      console.log(`[red-team] ← ${ctx.sender} | "${topic}" | ${keyFacts.length} facts`)
 
       if (mock || !anthropic) {
-        return {
-          counterarguments: claims.map((_, i) => MOCK_COUNTERARGUMENTS[i % MOCK_COUNTERARGUMENTS.length]),
-        }
+        return MOCK_RED_TEAM
       }
 
-      const claimList = claims.map((c, i) => `${i + 1}. ${c}`).join('\n')
+      const factList = keyFacts.map((f, i) => `${i + 1}. ${f}`).join('\n')
+      const questionList = openQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')
+
       const message = await anthropic.messages.create({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 512,
         messages: [{
           role: 'user',
-          content: `You are a sharp devil's advocate debating: "${topic}"\n\nChallenge each claim with a concise counterargument (1-2 sentences). Return ONLY a numbered list matching the input order. No preamble.\n\n${claimList}`,
+          content: `You are a rigorous red team analyst. A research briefing on "${topic}" has been submitted for review.\n\nKey facts claimed:\n${factList}\n\nOpen questions:\n${questionList}\n\nReturn your analysis as JSON:\n{\n  "assumptionsChallenged": ["...", "..."],\n  "gapsIdentified": ["...", "..."],\n  "reliabilityRating": "high" | "medium" | "low",\n  "verdict": "One sentence verdict."\n}\nReturn ONLY the JSON object. No preamble.`,
         }],
       })
 
       const text = message.content[0].type === 'text' ? message.content[0].text : ''
-      const counterarguments = text
-        .split('\n')
-        .filter(line => /^\d+\.\s/.test(line.trim()))
-        .map(line => line.replace(/^\d+\.\s*/, '').trim())
-        .filter(Boolean)
-
-      return {
-        counterarguments: counterarguments.length > 0 ? counterarguments : [text],
+      try {
+        const parsed = JSON.parse(text)
+        return redTeamOutputSchema.parse(parsed)
+      } catch {
+        return MOCK_RED_TEAM
       }
     },
   }
