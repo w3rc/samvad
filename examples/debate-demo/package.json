@@ -1,0 +1,21 @@
+{
+  "name": "debate-demo",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "researcher": "tsx researcher.ts",
+    "critic": "tsx critic.ts",
+    "demo": "tsx run-demo.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@samvad-protocol/sdk": "latest",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}
