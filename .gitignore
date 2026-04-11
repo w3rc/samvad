@@ -8,3 +8,6 @@ dist/
 # Superpowers workflow artifacts (brainstorm state, specs, plans)
 .superpowers/
 docs/superpowers/
+
+# Personal working notes — not part of the public repo
+TODO.md
