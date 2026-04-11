@@ -57,7 +57,6 @@ Honesty about the edges matters, especially pre-1.0.
 - **No discovery without knowing the domain.** Today, to call an agent you have to know its URL. An optional public registry for search-by-specialization is planned but not shipped.
 - **TypeScript SDK only.** A Python SDK with feature parity is on the roadmap; no other languages yet.
 - **Regex-only prompt-injection scanner by default.** The built-in scanner catches obvious strings but is bypassed by adaptive attacks more than 90% of the time. For high-trust skills, plug in an LLM-based classifier via `injectionClassifier` — see [Injection defense](#injection-defense) below.
-- **Canonical-JSON signing, not RFC 9421 yet.** Envelopes are signed over a deterministic JSON serialization of all fields. The roadmap is to migrate to RFC 9421 HTTP Message Signatures so the wire format lines up with IETF-standard tooling.
 - **No built-in session memory.** The protocol is deliberately stateless per message. Agents that need conversation history across calls manage their own state — the protocol won't do it for you.
 - **No payments, orchestration, or workflow engine.** SAMVAD is a wire protocol. Billing, workflow runtimes, and multi-agent orchestration are explicitly out of scope and belong in layers built on top.
 - **HTTPS and a real domain are required.** Identity is anchored in web PKI, so purely local or private-network use cases need at least a self-signed cert and a resolvable hostname to be protocol-compliant.
@@ -292,6 +291,14 @@ Every compliant agent exposes exactly seven endpoints:
 
 Every call — sync, async, or stream — carries the same signed envelope:
 
+HTTP headers (per RFC 9421):
+```
+Content-Digest:   sha-256=:base64-sha256-of-body:
+Signature-Input:  sig1=("@method" "@path" "content-digest");keyid="key-current";alg="ed25519";created=1744369200
+Signature:        sig1=:base64-ed25519-signature:
+```
+
+JSON body:
 ```json
 {
   "from": "agent://caller.com",
@@ -300,8 +307,6 @@ Every call — sync, async, or stream — carries the same signed envelope:
   "mode": "sync",
   "nonce": "a1b2c3d4e5f6",
   "timestamp": "2026-04-11T10:00:00Z",
-  "kid": "key-current",
-  "signature": "base64-ed25519-signature",
   "traceId": "root-correlation-uuid",
   "spanId": "this-hop-uuid",
   "parentSpanId": "caller-span-uuid",
@@ -311,7 +316,7 @@ Every call — sync, async, or stream — carries the same signed envelope:
 }
 ```
 
-The signature covers a recursive canonical-JSON serialization of every field except `signature` itself (sorted keys at every depth), so any tampering — including field reordering or a body substitution — invalidates the signature.
+The signature covers `@method`, `@path`, and the `Content-Digest` of the body (RFC 9421, Section 2.5). Body integrity is verified separately via SHA-256 (`Content-Digest`, RFC 9530). Any tampering with the body or the signed headers invalidates the signature.
 
 ### Response envelope
 
@@ -347,7 +352,7 @@ On error, `status` is `"error"`, `result` is absent, and `error` is populated wi
 SAMVAD enforces eight layers of defense — all automatic in the SDK.
 
 1. **Agent identity (DNS + TLS).** Real TLS certificate, real domain. Identity is the web's existing PKI.
-2. **Message signing (Ed25519 + canonical JSON).** Every envelope is signed across all fields except `signature`. Each message carries a UUID nonce and an ISO timestamp; the receiver rejects anything older than five minutes or whose nonce has been seen inside the window.
+2. **Message signing (RFC 9421 HTTP Message Signatures).** The body is integrity-protected by a `Content-Digest` header (SHA-256, RFC 9530), and the Ed25519 signature covers `@method`, `@path`, and `content-digest`. Each message carries a UUID nonce and an ISO timestamp in the envelope; the receiver rejects anything older than five minutes or whose nonce has been seen inside the window.
 3. **Trust tiers.** Per-skill enforcement of `public` / `authenticated` / `trusted-peers`, checked after signature verification so a forged sender ID cannot claim peer trust.
 4. **Input validation + injection defense.** Inputs are validated against the skill's JSON Schema; unknown fields are dropped; `maxLength` is enforced. A regex-based prompt-injection scanner runs as a first pass — but *only after* signature verification, so untrusted input is never scanned before being proven to come from a known peer. A content-boundary wrapper is provided for passing peer messages into LLM context.
 5. **Rate limiting + token budgets.** Per-sender sliding-window request limits and per-sender daily token budgets declared in the agent card and enforced by the SDK. Critical for public agents that absorb their own LLM costs.
@@ -476,7 +481,7 @@ Each hop verifies the token, enforces the scope against the skill being called, 
 ### What the SDK handles for you
 
 - Ed25519 keypair generation, persistence, and loading
-- Canonical JSON signing and verification of every envelope
+- RFC 9421 HTTP Message Signatures (Ed25519 + Content-Digest) for every envelope
 - Agent-card generation from `Agent` config and registered skills
 - `/agent/intro` and `/agent/health` auto-generation
 - JSON Schema derivation from Zod and per-request validation
@@ -575,7 +580,7 @@ samvad/
 │       │   ├── agent.ts           # Agent class (server builder)
 │       │   ├── agent-client.ts    # AgentClient (calling other agents)
 │       │   ├── server.ts          # Fastify server + verify pipeline
-│       │   ├── signing.ts         # Ed25519 + canonical JSON
+│       │   ├── signing.ts         # Ed25519 + RFC 9421 HTTP Message Signatures
 │       │   ├── delegation.ts      # JWT delegation tokens (jose)
 │       │   ├── skill-registry.ts  # Skill registration + dispatch
 │       │   ├── task-store.ts      # Async task state
@@ -630,7 +635,7 @@ What's implemented today:
 
 - Full TypeScript SDK covering sync, async, and streaming modes
 - All eight security layers (with a regex-only injection scanner as a first pass)
-- Ed25519 signing over canonical JSON, nonce replay protection, per-sender rate limiting and token budgets
+- RFC 9421 HTTP Message Signatures (Ed25519 + Content-Digest), nonce replay protection, per-sender rate limiting and token budgets
 - EdDSA JWT delegation with scope and depth enforcement
 - Self-sovereign discovery via `/.well-known/agent.json`
 
@@ -638,7 +643,6 @@ Planned, not yet shipped:
 
 - **Python SDK** (`samvad`) with feature parity
 - **Optional public registry** for agent discovery by specialization, model, and capability
-- **RFC 9421 HTTP Message Signatures** as the wire-format for signing, so SDKs can share verified IETF-standard implementations
 - **Built-in LLM classifier adapters** (LLM Guard, Guardrails AI) — the `injectionClassifier` hook is already shipped; provider-specific adapters remain out of scope
 - **Formal spec repository** with language-agnostic protocol documents
 
