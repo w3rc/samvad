@@ -5,6 +5,9 @@
 
 *samvad* (संवाद) — Sanskrit for "dialogue between parties."
 
+[![npm](https://img.shields.io/npm/v/@samvad-protocol/sdk)](https://www.npmjs.com/package/@samvad-protocol/sdk)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue)](./LICENSE)
+
 SAMVAD is an open, developer-first protocol for internet-scale agent-to-agent discovery and communication. Any developer can publish a protocol-compliant agent in minutes, and any other agent on the internet can discover it, verify its identity, and call its skills — with no central registry, no accounts, and no platform lock-in.
 
 > **Status:** Pre-1.0. Protocol version `1.1`. The spec is stable; the TypeScript SDK is feature-complete for the core protocol and under active development. APIs may change before 1.0.
