@@ -5,8 +5,6 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "researcher": "tsx researcher.ts",
-    "critic": "tsx critic.ts",
     "demo": "tsx run-demo.ts"
   },
   "dependencies": {
