@@ -142,12 +142,25 @@ That's it. You have a signed, rate-limited, injection-scanned, streaming-capable
 
 ## See it in action
 
-*Spin up the example agent in under a minute — Ed25519 keypair auto-generated, agent card published, all seven endpoints live.*
+*Two agents debating — each claim sent as a signed SAMVAD envelope, challenged in real time by a Red Team agent on a separate port.*
 
-> **Hosted demo coming soon.** In the meantime, spin up the example agent locally:
+![SAMVAD debate demo — Research Assistant and Red Team Agent exchanging signed envelopes claim by claim](examples/debate-demo/demo.gif)
+
+*Spin up the debate demo yourself:*
 
 ```bash
-git clone https://github.com/samvad-protocol/samvad
+git clone https://github.com/w3rc/samvad
+cd samvad/examples/debate-demo
+npm install
+npm run demo:live "AI will replace software engineers"
+# or with real LLMs:
+# OPENROUTER_API_KEY=... GROQ_API_KEY=... npm run demo:live "..."
+```
+
+*Or spin up the basic example agent in under a minute:*
+
+```bash
+git clone https://github.com/w3rc/samvad
 cd samvad/examples/basic-agent-ts
 npm install
 npm start          # agent starts on http://localhost:3002
