@@ -28,8 +28,10 @@ export const redTeamOutputSchema = z.object({
   verdict: z.string(),
 })
 
-export function buildRedTeamSkill(mock: boolean) {
-  const openai = mock ? null : new OpenAI()
+export function buildRedTeamSkill() {
+  const openai = process.env.GROQ_API_KEY
+    ? new OpenAI({ baseURL: 'https://api.groq.com/openai/v1', apiKey: process.env.GROQ_API_KEY })
+    : null
 
   return {
     name: 'Red Team',
@@ -46,7 +48,7 @@ export function buildRedTeamSkill(mock: boolean) {
       }
       console.log(`[red-team] ← ${ctx.sender} | "${topic}" | ${keyFacts.length} facts`)
 
-      if (mock || !openai) {
+      if (!openai) {
         return MOCK_RED_TEAM
       }
 
@@ -54,7 +56,7 @@ export function buildRedTeamSkill(mock: boolean) {
       const questionList = openQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')
 
       const completion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
+        model: 'llama-3.1-8b-instant',
         max_tokens: 512,
         messages: [{
           role: 'user',

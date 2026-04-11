@@ -35,8 +35,10 @@ export const briefOutputSchema = z.object({
   traceId: z.string(),
 })
 
-export function buildResearchSkill(mock: boolean, redTeamClient: AgentClient) {
-  const openai = mock ? null : new OpenAI()
+export function buildResearchSkill(redTeamClient: AgentClient) {
+  const openai = process.env.OPENROUTER_API_KEY
+    ? new OpenAI({ baseURL: 'https://openrouter.ai/api/v1', apiKey: process.env.OPENROUTER_API_KEY })
+    : null
 
   return {
     name: 'Brief',
@@ -53,13 +55,13 @@ export function buildResearchSkill(mock: boolean, redTeamClient: AgentClient) {
       let openQuestions: string[]
       let confidenceScore: number
 
-      if (mock || !openai) {
+      if (!openai) {
         keyFacts = MOCK_BRIEF.keyFacts
         openQuestions = MOCK_BRIEF.openQuestions
         confidenceScore = MOCK_BRIEF.confidenceScore
       } else {
         const completion = await openai.chat.completions.create({
-          model: 'gpt-4o',
+          model: 'google/gemma-3-27b-it:free',
           max_tokens: 512,
           messages: [{
             role: 'user',
