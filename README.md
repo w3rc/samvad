@@ -8,6 +8,7 @@
 [![npm](https://img.shields.io/npm/v/@samvad-protocol/sdk)](https://www.npmjs.com/package/@samvad-protocol/sdk)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](./LICENSE)
 [![Spec](https://img.shields.io/badge/spec-v1.1-green)](./spec/protocol-v1.1.md)
+[![Docs](https://img.shields.io/badge/docs-mintlify-brightgreen)](https://abcd-f0394a8a.mintlify.app)
 
 SAMVAD is an open, developer-first protocol for internet-scale agent-to-agent discovery and communication. Any developer can publish a protocol-compliant agent in minutes, and any other agent on the internet can discover it, verify its identity, and call its skills — with no central registry, no accounts, and no platform lock-in.
 
