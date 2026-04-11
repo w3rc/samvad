@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Agent, AgentClient } from '@samvad-protocol/sdk'
-import { buildCriticSkill } from './critic.js'
-import { buildResearcherSkill } from './researcher.js'
+import { buildRedTeamSkill } from './critic.js'
+import { buildResearchSkill } from './researcher.js'
 
 const TOPIC = process.argv[2] ?? 'AI will replace software engineers'
-const MOCK = process.env.MOCK === 'true'
-const CRITIC_PORT = 3011
+const MOCK = !process.env.ANTHROPIC_API_KEY
+const RED_TEAM_PORT = 3011
 const RESEARCHER_PORT = 3010
-const CRITIC_URL = `http://localhost:${CRITIC_PORT}`
+const RED_TEAM_URL = `http://localhost:${RED_TEAM_PORT}`
 const RESEARCHER_URL = `http://localhost:${RESEARCHER_PORT}`
 
 // ── ANSI helpers ─────────────────────────────────────────────────────────────
@@ -20,9 +20,9 @@ const line = () => console.log(dim('─'.repeat(60)))
 
 async function main() {
   console.log()
-  console.log(bold('SAMVAD Debate Demo'))
+  console.log(bold('SAMVAD — Research + Red Team Demo'))
   console.log(dim(`Topic: "${TOPIC}"`))
-  if (MOCK) console.log(yellow('  [mock mode — set ANTHROPIC_API_KEY to use real Claude]'))
+  if (MOCK) console.log(dim('[mock mode — set ANTHROPIC_API_KEY to use real Claude]'))
   console.log()
 
   // ── Step 1: Pre-generate all keypairs ──────────────────────────────────────
@@ -32,82 +32,106 @@ async function main() {
     agentId: 'agent://runner.local',
   })
 
-  // Researcher-outbound key (used when researcher calls critic)
-  // Must be stable across calls, so we pre-generate and register with critic
+  // Researcher-outbound key (used when researcher calls red team)
+  // Must be stable across calls, so we pre-generate and register with red team
   const researcherOutboundClient = await AgentClient.prepare({
     keysDir: '.samvad/researcher-outbound-keys',
     agentId: 'agent://researcher-outbound.local',
   })
 
-  // ── Step 2: Build critic agent ─────────────────────────────────────────────
-  const criticAgent = new Agent({
-    name: 'Critic Agent',
+  // ── Step 2: Build red team agent ───────────────────────────────────────────
+  const redTeamAgent = new Agent({
+    name: 'Red Team Agent',
     version: '1.0.0',
-    description: 'Challenges claims with sharp counterarguments.',
-    url: CRITIC_URL,
+    description: 'Pressure-tests research briefings by challenging assumptions, identifying gaps, and rating reliability.',
+    url: RED_TEAM_URL,
     keysDir: '.samvad/critic-keys',
-    specializations: ['debate', 'critical-analysis'],
+    specializations: ['red-team', 'verification'],
     rateLimit: { requestsPerMinute: 10, requestsPerSender: 5, tokensPerSenderPerDay: 50000 },
   })
 
-  // Critic trusts researcher's outbound keypair
-  criticAgent.trustPeer('agent://researcher-outbound.local', researcherOutboundClient.publicKey)
-  criticAgent.skill('critique', buildCriticSkill(MOCK))
+  // Red team trusts researcher's outbound keypair
+  redTeamAgent.trustPeer('agent://researcher-outbound.local', researcherOutboundClient.publicKey)
+  redTeamAgent.skill('red_team', buildRedTeamSkill(MOCK))
 
-  // ── Step 3: Start critic server ────────────────────────────────────────────
-  await criticAgent.serve({ port: CRITIC_PORT })
+  // ── Step 3: Start red team server ──────────────────────────────────────────
+  await redTeamAgent.serve({ port: RED_TEAM_PORT })
 
-  // ── Step 4: Build critic client (pre-registered key, used by researcher) ───
-  await researcherOutboundClient.connect(CRITIC_URL)
+  // ── Step 4: Build red team client (pre-registered key, used by researcher) ─
+  await researcherOutboundClient.connect(RED_TEAM_URL)
 
-  // ── Step 5: Build researcher agent ────────────────────────────────────────
+  // ── Step 5: Build research assistant agent ────────────────────────────────
   const researcherAgent = new Agent({
-    name: 'Researcher Agent',
+    name: 'Research Assistant',
     version: '1.0.0',
-    description: 'Researches a topic and debates it with a critic agent via SAMVAD.',
+    description: 'Researches a topic and produces a structured briefing, then routes it to the Red Team agent for verification.',
     url: RESEARCHER_URL,
     keysDir: '.samvad/researcher-keys',
-    specializations: ['debate', 'research'],
+    specializations: ['research', 'briefing'],
     rateLimit: { requestsPerMinute: 10, requestsPerSender: 5, tokensPerSenderPerDay: 50000 },
   })
 
   // Researcher trusts the runner (this orchestrator)
   researcherAgent.trustPeer('agent://runner.local', runnerClient.publicKey)
-  researcherAgent.skill('research', buildResearcherSkill(MOCK, researcherOutboundClient))
+  researcherAgent.skill('brief', buildResearchSkill(MOCK, researcherOutboundClient))
 
   // ── Step 6: Start researcher server ───────────────────────────────────────
   await researcherAgent.serve({ port: RESEARCHER_PORT })
 
-  // ── Step 7: Connect runner and run the debate ─────────────────────────────
+  // ── Step 7: Connect runner and run the demo ───────────────────────────────
   await runnerClient.connect(RESEARCHER_URL)
 
-  console.log(dim(`runner → researcher (${RESEARCHER_URL}) → critic (${CRITIC_URL})`))
-  console.log(dim('skills: research → critique'))
+  console.log(dim(`agent://localhost:${RESEARCHER_PORT} → agent://localhost:${RED_TEAM_PORT}`))
+  console.log(dim('skills: brief → red_team'))
   line()
   console.log()
 
-  const result = await runnerClient.call('research', { topic: TOPIC }) as {
+  const result = await runnerClient.call('brief', { topic: TOPIC }) as {
     topic: string
-    claims: string[]
-    counterarguments: string[]
-    criticId: string
+    keyFacts: string[]
+    openQuestions: string[]
+    confidenceScore: number
+    redTeam: {
+      assumptionsChallenged: string[]
+      gapsIdentified: string[]
+      reliabilityRating: 'high' | 'medium' | 'low'
+      verdict: string
+    }
+    redTeamAgentId: string
     traceId: string
   }
 
   // ── Pretty print ──────────────────────────────────────────────────────────
-  console.log(cyan(bold('RESEARCHER')) + dim(` (${RESEARCHER_URL})`))
-  result.claims.forEach((claim, i) => {
-    console.log(`  ${dim(`${i + 1}.`)} ${claim}`)
+  console.log(cyan(bold('RESEARCH ASSISTANT')) + dim(`  (${RESEARCHER_URL})`))
+  console.log('Key facts:')
+  result.keyFacts.forEach((fact, i) => {
+    console.log(`  ${i + 1}. ${fact}`)
   })
+  console.log()
+  console.log('Open questions:')
+  result.openQuestions.forEach((q, i) => {
+    console.log(`  ${i + 1}. ${q}`)
+  })
+  console.log()
+  console.log(`Confidence: ${result.confidenceScore}%`)
 
   console.log()
   line()
   console.log()
 
-  console.log(yellow(bold('CRITIC')) + dim(` (${result.criticId})`))
-  result.counterarguments.forEach((ca, i) => {
-    console.log(`  ${dim(`${i + 1}.`)} ${ca}`)
+  console.log(yellow(bold('RED TEAM AGENT')) + dim(`  (agent://localhost:${RED_TEAM_PORT})`))
+  console.log('Assumptions challenged:')
+  result.redTeam.assumptionsChallenged.forEach((a, i) => {
+    console.log(`  ${i + 1}. ${a}`)
   })
+  console.log()
+  console.log('Gaps identified:')
+  result.redTeam.gapsIdentified.forEach((g, i) => {
+    console.log(`  ${i + 1}. ${g}`)
+  })
+  console.log()
+  console.log(`Reliability: ${result.redTeam.reliabilityRating.toUpperCase()}`)
+  console.log(`Verdict: ${result.redTeam.verdict}`)
 
   console.log()
   line()

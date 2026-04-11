@@ -3,73 +3,98 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { AgentClient } from '@samvad-protocol/sdk'
 import { z } from 'zod'
 
-const MOCK_CLAIMS = [
-  'AI systems already outperform humans on standardised coding benchmarks.',
-  'The cost of AI-generated code is falling faster than developer salaries.',
-  'Early adopters of AI coding tools report 30–50% productivity gains.',
-]
+const MOCK_BRIEF = {
+  keyFacts: [
+    'AI systems already outperform humans on standardised coding benchmarks.',
+    'The cost of AI-generated code is falling 40% year-over-year.',
+    'Early adopters of AI coding tools report 30-50% productivity gains on well-scoped tasks.',
+  ],
+  openQuestions: [
+    'How does AI perform on ambiguous requirements and legacy codebases?',
+    'What happens to system design and architecture roles long-term?',
+  ],
+  confidenceScore: 68,
+}
 
-export const researchInputSchema = z.object({
+export const briefInputSchema = z.object({
   topic: z.string().min(3).max(200),
 })
 
-export const researchOutputSchema = z.object({
+export const briefOutputSchema = z.object({
   topic: z.string(),
-  claims: z.array(z.string()),
-  counterarguments: z.array(z.string()),
-  criticId: z.string(),
+  keyFacts: z.array(z.string()),
+  openQuestions: z.array(z.string()),
+  confidenceScore: z.number().min(0).max(100),
+  redTeam: z.object({
+    assumptionsChallenged: z.array(z.string()),
+    gapsIdentified: z.array(z.string()),
+    reliabilityRating: z.enum(['high', 'medium', 'low']),
+    verdict: z.string(),
+  }),
+  redTeamAgentId: z.string(),
   traceId: z.string(),
 })
 
-export function buildResearcherSkill(mock: boolean, criticClient: AgentClient) {
+export function buildResearchSkill(mock: boolean, redTeamClient: AgentClient) {
   const anthropic = mock ? null : new Anthropic()
 
   return {
-    name: 'Research',
-    description: 'Researches a topic, generates key claims, then debates them with a critic agent via SAMVAD.',
-    input: researchInputSchema,
-    output: researchOutputSchema,
+    name: 'Brief',
+    description: 'Researches a topic and returns a structured briefing with key facts, open questions, and a confidence score — then automatically pressure-tests it with the Red Team agent.',
+    input: briefInputSchema,
+    output: briefOutputSchema,
     modes: ['sync'] as const,
     trust: 'public' as const,
     handler: async (input: unknown, ctx: { sender: string; traceId: string; spanId: string }) => {
       const { topic } = input as { topic: string }
       console.log(`[researcher] ← ${ctx.sender} | "${topic}"`)
 
-      let claims: string[]
+      let keyFacts: string[]
+      let openQuestions: string[]
+      let confidenceScore: number
 
       if (mock || !anthropic) {
-        claims = MOCK_CLAIMS
+        keyFacts = MOCK_BRIEF.keyFacts
+        openQuestions = MOCK_BRIEF.openQuestions
+        confidenceScore = MOCK_BRIEF.confidenceScore
       } else {
         const message = await anthropic.messages.create({
           model: 'claude-haiku-4-5-20251001',
-          max_tokens: 384,
+          max_tokens: 512,
           messages: [{
             role: 'user',
-            content: `Generate exactly 3 bold, arguable claims about: "${topic}"\n\nReturn ONLY a numbered list (1. 2. 3.). No preamble.`,
+            content: `Research the topic: "${topic}"\n\nReturn a structured briefing with exactly:\n- 3 key facts (concrete, specific, cited where possible)\n- 2 open questions that remain unresolved\n- A confidence score 0-100 for the overall briefing\n\nFormat as JSON:\n{\n  "keyFacts": ["...", "...", "..."],\n  "openQuestions": ["...", "..."],\n  "confidenceScore": 75\n}\nReturn ONLY the JSON object. No preamble.`,
           }],
         })
 
         const text = message.content[0].type === 'text' ? message.content[0].text : ''
-        claims = text
-          .split('\n')
-          .filter(line => /^\d+\.\s/.test(line.trim()))
-          .map(line => line.replace(/^\d+\.\s*/, '').trim())
-          .filter(Boolean)
-          .slice(0, 3)
-
-        if (claims.length === 0) claims = [text]
+        try {
+          const parsed = JSON.parse(text)
+          keyFacts = Array.isArray(parsed.keyFacts) ? parsed.keyFacts.slice(0, 3) : MOCK_BRIEF.keyFacts
+          openQuestions = Array.isArray(parsed.openQuestions) ? parsed.openQuestions.slice(0, 2) : MOCK_BRIEF.openQuestions
+          confidenceScore = typeof parsed.confidenceScore === 'number' ? parsed.confidenceScore : MOCK_BRIEF.confidenceScore
+        } catch {
+          keyFacts = MOCK_BRIEF.keyFacts
+          openQuestions = MOCK_BRIEF.openQuestions
+          confidenceScore = MOCK_BRIEF.confidenceScore
+        }
       }
 
-      console.log(`[researcher] → critic | calling critique skill via SAMVAD`)
-      const critiqueResult = await criticClient.call('critique', { topic, claims }) as {
-        counterarguments: string[]
+      console.log(`[researcher] → red-team | calling red_team skill via SAMVAD`)
+      const redTeamResult = await redTeamClient.call('red_team', { topic, keyFacts, openQuestions }) as {
+        assumptionsChallenged: string[]
+        gapsIdentified: string[]
+        reliabilityRating: 'high' | 'medium' | 'low'
+        verdict: string
       }
 
       return {
         topic,
-        claims,
-        counterarguments: critiqueResult.counterarguments,
-        criticId: criticClient.card?.id ?? 'unknown',
+        keyFacts,
+        openQuestions,
+        confidenceScore,
+        redTeam: redTeamResult,
+        redTeamAgentId: redTeamClient.card?.id ?? 'unknown',
         traceId: ctx.traceId,
       }
     },
