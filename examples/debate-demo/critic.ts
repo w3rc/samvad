@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
 import { z } from 'zod'
 
 const MOCK_RED_TEAM = {
@@ -29,7 +29,7 @@ export const redTeamOutputSchema = z.object({
 })
 
 export function buildRedTeamSkill(mock: boolean) {
-  const anthropic = mock ? null : new Anthropic()
+  const openai = mock ? null : new OpenAI()
 
   return {
     name: 'Red Team',
@@ -46,15 +46,15 @@ export function buildRedTeamSkill(mock: boolean) {
       }
       console.log(`[red-team] ← ${ctx.sender} | "${topic}" | ${keyFacts.length} facts`)
 
-      if (mock || !anthropic) {
+      if (mock || !openai) {
         return MOCK_RED_TEAM
       }
 
       const factList = keyFacts.map((f, i) => `${i + 1}. ${f}`).join('\n')
       const questionList = openQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')
 
-      const message = await anthropic.messages.create({
-        model: 'claude-haiku-4-5-20251001',
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
         max_tokens: 512,
         messages: [{
           role: 'user',
@@ -62,7 +62,7 @@ export function buildRedTeamSkill(mock: boolean) {
         }],
       })
 
-      const text = message.content[0].type === 'text' ? message.content[0].text : ''
+      const text = completion.choices[0]?.message?.content ?? ''
       try {
         const parsed = JSON.parse(text)
         return redTeamOutputSchema.parse(parsed)

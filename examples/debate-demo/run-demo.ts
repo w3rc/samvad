@@ -4,7 +4,7 @@ import { buildRedTeamSkill } from './critic.js'
 import { buildResearchSkill } from './researcher.js'
 
 const TOPIC = process.argv[2] ?? 'AI will replace software engineers'
-const MOCK = !process.env.ANTHROPIC_API_KEY
+const MOCK = !process.env.OPENAI_API_KEY
 const RED_TEAM_PORT = 3011
 const RESEARCHER_PORT = 3010
 const RED_TEAM_URL = `http://localhost:${RED_TEAM_PORT}`
@@ -22,7 +22,7 @@ async function main() {
   console.log()
   console.log(bold('SAMVAD — Research + Red Team Demo'))
   console.log(dim(`Topic: "${TOPIC}"`))
-  if (MOCK) console.log(dim('[mock mode — set ANTHROPIC_API_KEY to use real Claude]'))
+  if (MOCK) console.log(dim('[mock mode — set OPENAI_API_KEY to use real GPT-4o-mini]'))
   console.log()
 
   // ── Step 1: Pre-generate all keypairs ──────────────────────────────────────
