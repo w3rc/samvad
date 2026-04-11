@@ -21,7 +21,7 @@ async function main() {
   console.log()
   console.log(bold('SAMVAD — Research + Red Team Demo'))
   console.log(dim(`Topic: "${TOPIC}"`))
-  console.log(dim(`  research:  ${process.env.OPENROUTER_API_KEY ? 'OpenRouter google/gemma-3-27b-it:free' : 'mock mode — set OPENROUTER_API_KEY'}`))
+  console.log(dim(`  research:  ${process.env.OPENROUTER_API_KEY ? 'OpenRouter google/gemma-4-26b-a4b-it:free' : 'mock mode — set OPENROUTER_API_KEY'}`))
   console.log(dim(`  red team:  ${process.env.GROQ_API_KEY ? 'Groq llama-3.1-8b-instant' : 'mock mode — set GROQ_API_KEY'}`))
   console.log()
 

@@ -61,7 +61,7 @@ export function buildResearchSkill(redTeamClient: AgentClient) {
         confidenceScore = MOCK_BRIEF.confidenceScore
       } else {
         const completion = await openai.chat.completions.create({
-          model: 'google/gemma-3-27b-it:free',
+          model: 'google/gemma-4-26b-a4b-it:free',
           max_tokens: 512,
           messages: [{
             role: 'user',
