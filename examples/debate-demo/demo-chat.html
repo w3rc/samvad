@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SAMVAD — Agent Debate Demo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #0d0d1a;
+      --header-bg:   #12122a;
+      --footer-bg:   #10102a;
+      --purple:      #a78bfa;
+      --purple-dim:  #7c3aed;
+      --purple-glow: rgba(167,139,250,0.18);
+      --teal:        #2dd4bf;
+      --teal-dim:    #0d9488;
+      --teal-bg:     rgba(45,212,191,0.08);
+      --orange:      #fb923c;
+      --orange-dim:  #ea580c;
+      --orange-bg:   rgba(251,146,60,0.08);
+      --msg-teal-bg-start: #134e4a;
+      --msg-teal-bg-end:   #0f3a37;
+      --msg-teal-text:     #ccfbf1;
+      --msg-teal-border:   #0d9488;
+      --msg-orange-bg-start: #431407;
+      --msg-orange-bg-end:   #3a1006;
+      --msg-orange-text:     #fed7aa;
+      --msg-orange-border:   #c2410c;
+      --muted:       #6b7280;
+      --dimtext:     #9ca3af;
+      --font:        'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    body {
+      background: var(--bg);
+      font-family: var(--font);
+      color: #e5e7eb;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── HEADER ────────────────────────────────────────────── */
+    .header {
+      background: var(--header-bg);
+      border-bottom: 1px solid rgba(167,139,250,0.15);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      box-shadow: 0 1px 20px rgba(0,0,0,0.4);
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .logo {
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: 0.12em;
+      color: var(--purple);
+      text-shadow: 0 0 20px rgba(167,139,250,0.5);
+    }
+
+    .topic-pill {
+      background: rgba(167,139,250,0.12);
+      border: 1px solid rgba(167,139,250,0.3);
+      border-radius: 20px;
+      padding: 3px 12px;
+      font-size: 12px;
+      font-style: italic;
+      color: #c4b5fd;
+      letter-spacing: 0.01em;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .agent-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px 4px 8px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      border: 1px solid transparent;
+    }
+
+    .agent-pill.teal {
+      background: var(--teal-bg);
+      border-color: rgba(45,212,191,0.25);
+      color: var(--teal);
+    }
+
+    .agent-pill.orange {
+      background: var(--orange-bg);
+      border-color: rgba(251,146,60,0.25);
+      color: var(--orange);
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .dot.teal  { background: var(--teal);   box-shadow: 0 0 6px var(--teal); }
+    .dot.orange { background: var(--orange); box-shadow: 0 0 6px var(--orange); }
+
+    /* ── MESSAGES AREA ─────────────────────────────────────── */
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 0 16px;
+      scroll-behavior: smooth;
+    }
+
+    .messages::-webkit-scrollbar { width: 4px; }
+    .messages::-webkit-scrollbar-track { background: transparent; }
+    .messages::-webkit-scrollbar-thumb { background: rgba(167,139,250,0.2); border-radius: 2px; }
+
+    .msg-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 0 28px;
+      margin-bottom: 4px;
+      opacity: 0;
+      transform: translateY(8px);
+      animation: slideUp 350ms ease forwards;
+    }
+
+    .msg-row.right {
+      flex-direction: row-reverse;
+    }
+
+    @keyframes slideUp {
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+      margin-top: 18px;
+    }
+
+    .avatar.teal   { background: linear-gradient(135deg, #134e4a, #065f46); border: 1.5px solid rgba(45,212,191,0.4); }
+    .avatar.orange { background: linear-gradient(135deg, #431407, #7c2d12); border: 1.5px solid rgba(251,146,60,0.4); }
+
+    .msg-content { max-width: 560px; }
+
+    .sender-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      margin-bottom: 5px;
+      text-transform: uppercase;
+    }
+
+    .sender-label.teal   { color: var(--teal); }
+    .sender-label.orange { color: var(--orange); text-align: right; }
+
+    .bubble {
+      padding: 12px 16px;
+      border-radius: 14px;
+      font-size: 14px;
+      line-height: 1.65;
+      border: 1px solid;
+    }
+
+    .bubble.teal {
+      background: linear-gradient(135deg, var(--msg-teal-bg-start), var(--msg-teal-bg-end));
+      border-color: var(--msg-teal-border);
+      color: var(--msg-teal-text);
+      border-bottom-left-radius: 4px;
+      box-shadow: 0 2px 16px rgba(13,148,136,0.15), inset 0 1px 0 rgba(45,212,191,0.08);
+    }
+
+    .bubble.orange {
+      background: linear-gradient(135deg, var(--msg-orange-bg-start), var(--msg-orange-bg-end));
+      border-color: var(--msg-orange-border);
+      color: var(--msg-orange-text);
+      border-bottom-right-radius: 4px;
+      box-shadow: 0 2px 16px rgba(194,65,12,0.15), inset 0 1px 0 rgba(251,146,60,0.08);
+    }
+
+    /* ── TYPING INDICATOR ───────────────────────────────────── */
+    .bubble.typing {
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .typing-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      animation: bounce 1.1s infinite ease-in-out;
+    }
+
+    .typing-dot.teal   { background: var(--teal); }
+    .typing-dot.orange { background: var(--orange); }
+    .typing-dot:nth-child(1) { animation-delay: 0s;    }
+    .typing-dot:nth-child(2) { animation-delay: 0.18s; }
+    .typing-dot:nth-child(3) { animation-delay: 0.36s; }
+
+    @keyframes bounce {
+      0%, 60%, 100% { transform: translateY(0); }
+      40%           { transform: translateY(-6px); }
+    }
+
+    /* ── CLAIM HEADER ───────────────────────────────────────── */
+    .claim-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 28px;
+      opacity: 0;
+      animation: fadeIn 300ms ease forwards;
+    }
+
+    .claim-line {
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(to right, transparent, rgba(167,139,250,0.25));
+    }
+
+    .claim-line.right {
+      background: linear-gradient(to left, transparent, rgba(167,139,250,0.25));
+    }
+
+    .claim-badge {
+      background: rgba(167,139,250,0.12);
+      border: 1px solid rgba(167,139,250,0.35);
+      border-radius: 20px;
+      padding: 3px 14px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--purple);
+      letter-spacing: 0.08em;
+      white-space: nowrap;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* ── ENVELOPE DIVIDER ───────────────────────────────────── */
+    .envelope-divider {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 40px;
+      opacity: 0;
+      animation: fadeIn 300ms ease forwards;
+    }
+
+    .envelope-line {
+      flex: 1;
+      height: 1px;
+      border-top: 1px dashed rgba(167,139,250,0.2);
+    }
+
+    .envelope-pill {
+      background: rgba(124,58,237,0.12);
+      border: 1px solid rgba(167,139,250,0.3);
+      border-radius: 20px;
+      padding: 3px 14px;
+      font-size: 11px;
+      color: #c4b5fd;
+      white-space: nowrap;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+      letter-spacing: 0.02em;
+    }
+
+    /* ── VERDICT ─────────────────────────────────────────────── */
+    .verdict-wrap {
+      padding: 12px 28px;
+      opacity: 0;
+      animation: fadeIn 400ms ease forwards;
+    }
+
+    .verdict-box {
+      background: #16163a;
+      border: 1px solid rgba(167,139,250,0.4);
+      border-radius: 14px;
+      padding: 18px 20px;
+      box-shadow: 0 4px 24px rgba(124,58,237,0.12), inset 0 1px 0 rgba(167,139,250,0.07);
+    }
+
+    .verdict-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      color: var(--purple);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .verdict-title::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: rgba(167,139,250,0.2);
+    }
+
+    .verdict-reliability {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .reliability-label {
+      font-size: 12px;
+      color: var(--dimtext);
+    }
+
+    .reliability-badge {
+      background: rgba(234,179,8,0.15);
+      border: 1px solid rgba(234,179,8,0.4);
+      border-radius: 12px;
+      padding: 2px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #fbbf24;
+      letter-spacing: 0.06em;
+    }
+
+    .verdict-text {
+      font-size: 13.5px;
+      line-height: 1.65;
+      color: #b4bfc9;
+    }
+
+    /* ── FOOTER ─────────────────────────────────────────────── */
+    .footer {
+      background: var(--footer-bg);
+      border-top: 1px solid rgba(167,139,250,0.1);
+      padding: 0 24px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .footer-left { display: flex; align-items: center; gap: 6px; }
+    .footer-count { color: #c4b5fd; font-weight: 600; }
+    .footer-sep { color: rgba(107,114,128,0.5); }
+    .footer-traceid { color: rgba(167,139,250,0.5); }
+
+    @keyframes fadeIn {
+      to { opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <span class="logo">SAMVAD</span>
+    <span class="topic-pill">Will AI replace software engineers?</span>
+  </div>
+  <div class="header-right">
+    <div class="agent-pill teal">
+      <div class="dot teal"></div>
+      Research Assistant
+    </div>
+    <div class="agent-pill orange">
+      <div class="dot orange"></div>
+      Red Team Agent
+    </div>
+  </div>
+</div>
+
+<!-- MESSAGES -->
+<div class="messages" id="messages"></div>
+
+<!-- FOOTER -->
+<div class="footer">
+  <div class="footer-left">
+    <span>🔒</span>
+    <span><span class="footer-count" id="envCount">0</span> envelopes</span>
+    <span class="footer-sep">·</span>
+    <span>Ed25519 signed</span>
+    <span class="footer-sep">·</span>
+    <span>RFC&nbsp;9421</span>
+  </div>
+  <div class="footer-traceid" id="traceId"></div>
+</div>
+
+<script>
+  const params   = new URLSearchParams(location.search);
+  const FAST     = params.get('fast') === '1';
+  const FACTOR   = FAST ? 0.4 : 1;
+
+  const T = {
+    afterClaim:   Math.round(500  * FACTOR),
+    typingDur:    Math.round(1400 * FACTOR),
+    afterMsg:     Math.round(400  * FACTOR),
+    beforeEnv:    Math.round(300  * FACTOR),
+    afterEnv:     Math.round(500  * FACTOR),
+    beforeVerdict:Math.round(800  * FACTOR),
+  };
+
+  const DEBATE = [
+    { type: 'claim', label: 'CLAIM 1 / 3' },
+    { type: 'researcher', text: 'AI systems already outperform humans on standardised coding benchmarks.' },
+    { type: 'envelope' },
+    { type: 'redteam', text: 'Benchmark performance \u2260 production engineering. Real work involves ambiguity, legacy systems, and stakeholder politics that benchmarks cannot model.' },
+    { type: 'claim', label: 'CLAIM 2 / 3' },
+    { type: 'researcher', text: 'The cost of AI-generated code is falling 40% year-over-year.' },
+    { type: 'envelope' },
+    { type: 'redteam', text: 'Jevons Paradox: cheaper code generation historically increases total software demand \u2014 expanding the market rather than shrinking it.' },
+    { type: 'claim', label: 'CLAIM 3 / 3' },
+    { type: 'researcher', text: 'Early adopters report 30\u201350% productivity gains on well-scoped tasks.' },
+    { type: 'envelope' },
+    { type: 'redteam', text: '\u201cWell-scoped\u201d excludes the hardest parts of engineering. Self-reported gains on cherry-picked tasks do not generalise to production systems.' },
+    { type: 'verdict' },
+  ];
+
+  const msgs    = document.getElementById('messages');
+  const envCount = document.getElementById('envCount');
+  const traceEl  = document.getElementById('traceId');
+  let envelopes  = 0;
+
+  function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  function scroll() { msgs.scrollTop = msgs.scrollHeight; }
+
+  function addClaim(label) {
+    const el = document.createElement('div');
+    el.className = 'claim-header';
+    el.innerHTML = `
+      <div class="claim-line"></div>
+      <div class="claim-badge">${label}</div>
+      <div class="claim-line right"></div>
+    `;
+    msgs.appendChild(el);
+    scroll();
+  }
+
+  function addEnvelope() {
+    const el = document.createElement('div');
+    el.className = 'envelope-divider';
+    el.innerHTML = `
+      <div class="envelope-line"></div>
+      <div class="envelope-pill">\u2709\ufe0e signed envelope \u00b7 Ed25519</div>
+      <div class="envelope-line"></div>
+    `;
+    msgs.appendChild(el);
+    envelopes++;
+    envCount.textContent = envelopes;
+    scroll();
+  }
+
+  function addTypingRow(side) {
+    const color = side === 'researcher' ? 'teal' : 'orange';
+    const icon  = side === 'researcher' ? '🔬' : '⚔️';
+    const isRight = side === 'redteam';
+
+    const row = document.createElement('div');
+    row.className = `msg-row${isRight ? ' right' : ''}`;
+    row.innerHTML = `
+      <div class="avatar ${color}">${icon}</div>
+      <div class="msg-content">
+        <div class="bubble ${color} typing">
+          <div class="typing-dot ${color}"></div>
+          <div class="typing-dot ${color}"></div>
+          <div class="typing-dot ${color}"></div>
+        </div>
+      </div>
+    `;
+    msgs.appendChild(row);
+    scroll();
+    return row;
+  }
+
+  function addMessage(side, text) {
+    const color = side === 'researcher' ? 'teal' : 'orange';
+    const icon  = side === 'researcher' ? '🔬' : '⚔️';
+    const name  = side === 'researcher' ? 'Research Assistant' : 'Red Team Agent';
+    const isRight = side === 'redteam';
+
+    const row = document.createElement('div');
+    row.className = `msg-row${isRight ? ' right' : ''}`;
+    row.innerHTML = `
+      <div class="avatar ${color}">${icon}</div>
+      <div class="msg-content">
+        <div class="sender-label ${color}">${name}</div>
+        <div class="bubble ${color}">${text}</div>
+      </div>
+    `;
+    msgs.appendChild(row);
+    scroll();
+  }
+
+  function addVerdict() {
+    envelopes++;
+    envCount.textContent = envelopes;
+    traceEl.textContent = 'traceId: a3f82c11-7d4e';
+
+    const el = document.createElement('div');
+    el.className = 'verdict-wrap';
+    el.innerHTML = `
+      <div class="verdict-box">
+        <div class="verdict-title">VERDICT</div>
+        <div class="verdict-reliability">
+          <span class="reliability-label">Reliability:</span>
+          <span class="reliability-badge">MEDIUM</span>
+        </div>
+        <div class="verdict-text">
+          Productivity gains are real but task-scoped. AI raises the ceiling for well-specified, greenfield work. Legacy systems, stakeholder negotiation, and architectural ambiguity remain human-intensive. Net displacement is unlikely in the near term; role evolution is near-certain.
+        </div>
+      </div>
+    `;
+    msgs.appendChild(el);
+    scroll();
+  }
+
+  async function runDebate() {
+    for (const step of DEBATE) {
+      if (step.type === 'claim') {
+        addClaim(step.label);
+        await sleep(T.afterClaim);
+
+      } else if (step.type === 'envelope') {
+        await sleep(T.beforeEnv);
+        addEnvelope();
+        await sleep(T.afterEnv);
+
+      } else if (step.type === 'researcher' || step.type === 'redteam') {
+        const typingRow = addTypingRow(step.type);
+        await sleep(T.typingDur);
+        typingRow.remove();
+        addMessage(step.type, step.text);
+        await sleep(T.afterMsg);
+
+      } else if (step.type === 'verdict') {
+        await sleep(T.beforeVerdict);
+        addVerdict();
+        // Signal completion after 1 second buffer
+        await sleep(1000);
+        window.DEBATE_COMPLETE = true;
+      }
+    }
+  }
+
+  // Start after a short delay to let fonts load
+  setTimeout(runDebate, 300);
+</script>
+</body>
+</html>
