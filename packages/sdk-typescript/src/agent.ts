@@ -9,7 +9,7 @@ import { RateLimiter } from './rate-limiter.js'
 import { NonceStore } from './nonce-store.js'
 import { buildAgentCard } from './card.js'
 import { buildServer } from './server.js'
-import type { CommunicationMode, TrustTier } from './types.js'
+import type { CommunicationMode, TrustTier, InjectionClassifier } from './types.js'
 import type { FastifyInstance } from 'fastify'
 
 export interface AgentConfig {
@@ -22,6 +22,7 @@ export interface AgentConfig {
   keysDir?: string
   cardTTL?: number
   rateLimit?: { requestsPerMinute: number; requestsPerSender: number; tokensPerSenderPerDay?: number }
+  injectionClassifier?: InjectionClassifier
 }
 
 export interface AgentSkillOptions {
@@ -102,6 +103,7 @@ export class Agent {
       nonceStore: new NonceStore(5 * 60_000),
       introText,
       knownPeers,
+      injectionClassifier: this.config.injectionClassifier,
     })
 
     await server.listen({ port, host })

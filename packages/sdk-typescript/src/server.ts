@@ -2,7 +2,7 @@
 import Fastify from 'fastify'
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { randomUUID } from 'node:crypto'
-import type { AgentCard, MessageEnvelope, ResponseEnvelope } from './types.js'
+import type { AgentCard, MessageEnvelope, ResponseEnvelope, InjectionClassifier } from './types.js'
 import type { SkillRegistry } from './skill-registry.js'
 import type { TaskStore } from './task-store.js'
 import type { RateLimiter } from './rate-limiter.js'
@@ -29,6 +29,7 @@ export interface ServerOptions {
   nonceStore: NonceStore
   introText: string
   knownPeers: Map<string, Uint8Array>  // agentId -> publicKey cache
+  injectionClassifier?: InjectionClassifier
 }
 
 export function buildServer(opts: ServerOptions): FastifyInstance {
