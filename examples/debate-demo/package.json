@@ -5,11 +5,14 @@
   "license": "Apache-2.0",
   "type": "module",
   "scripts": {
-    "demo": "tsx run-demo.ts"
+    "demo": "bash record-demo.sh",
+    "demo:live": "tsx run-demo.ts",
+    "demo:gif": "tsx record-chat.ts"
   },
   "dependencies": {
-    "openai": "^4.0.0",
     "@samvad-protocol/sdk": "latest",
+    "openai": "^4.0.0",
+    "playwright": "^1.59.1",
     "zod": "^3.23.0"
   },
   "devDependencies": {

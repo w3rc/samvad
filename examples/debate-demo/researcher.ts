@@ -3,18 +3,11 @@ import OpenAI from 'openai'
 import type { AgentClient } from '@samvad-protocol/sdk'
 import { z } from 'zod'
 
-const MOCK_BRIEF = {
-  keyFacts: [
-    'AI systems already outperform humans on standardised coding benchmarks.',
-    'The cost of AI-generated code is falling 40% year-over-year.',
-    'Early adopters of AI coding tools report 30-50% productivity gains on well-scoped tasks.',
-  ],
-  openQuestions: [
-    'How does AI perform on ambiguous requirements and legacy codebases?',
-    'What happens to system design and architecture roles long-term?',
-  ],
-  confidenceScore: 68,
-}
+const MOCK_CLAIMS = [
+  'AI systems already outperform humans on standardised coding benchmarks.',
+  'The cost of AI-generated code is falling 40% year-over-year.',
+  'Early adopters of AI coding tools report 30-50% productivity gains on well-scoped tasks.',
+]
 
 export const briefInputSchema = z.object({
   topic: z.string().min(3).max(200),
@@ -22,16 +15,13 @@ export const briefInputSchema = z.object({
 
 export const briefOutputSchema = z.object({
   topic: z.string(),
-  keyFacts: z.array(z.string()),
-  openQuestions: z.array(z.string()),
-  confidenceScore: z.number().min(0).max(100),
-  redTeam: z.object({
-    assumptionsChallenged: z.array(z.string()),
-    gapsIdentified: z.array(z.string()),
-    reliabilityRating: z.enum(['high', 'medium', 'low']),
-    verdict: z.string(),
-  }),
-  redTeamAgentId: z.string(),
+  debates: z.array(z.object({
+    claim: z.string(),
+    rebuttal: z.string(),
+  })),
+  reliabilityRating: z.enum(['high', 'medium', 'low']),
+  verdict: z.string(),
+  envelopeCount: z.number(),
   traceId: z.string(),
 })
 
@@ -42,7 +32,7 @@ export function buildResearchSkill(redTeamClient: AgentClient) {
 
   return {
     name: 'Brief',
-    description: 'Researches a topic and returns a structured briefing with key facts, open questions, and a confidence score — then automatically pressure-tests it with the Red Team agent.',
+    description: 'Researches a topic and debates each claim one-by-one with the Red Team agent via signed SAMVAD envelopes.',
     input: briefInputSchema,
     output: briefOutputSchema,
     modes: ['sync'] as const,
@@ -51,52 +41,54 @@ export function buildResearchSkill(redTeamClient: AgentClient) {
       const { topic } = input as { topic: string }
       console.log(`[researcher] ← ${ctx.sender} | "${topic}"`)
 
-      let keyFacts: string[]
-      let openQuestions: string[]
-      let confidenceScore: number
+      // ── Step 1: Generate claims ──────────────────────────────────────────
+      let claims: string[]
 
       if (!openai) {
-        keyFacts = MOCK_BRIEF.keyFacts
-        openQuestions = MOCK_BRIEF.openQuestions
-        confidenceScore = MOCK_BRIEF.confidenceScore
+        claims = MOCK_CLAIMS
       } else {
         const completion = await openai.chat.completions.create({
           model: 'google/gemma-4-26b-a4b-it:free',
-          max_tokens: 512,
+          max_tokens: 300,
           messages: [{
             role: 'user',
-            content: `Research the topic: "${topic}"\n\nReturn a structured briefing with exactly:\n- 3 key facts (concrete, specific)\n- 2 open questions that remain unresolved\n- A confidence score 0-100\n\nFormat as JSON:\n{\n  "keyFacts": ["...", "...", "..."],\n  "openQuestions": ["...", "..."],\n  "confidenceScore": 75\n}\nReturn ONLY the JSON object. No preamble.`,
+            content: `Research: "${topic}"\n\nReturn exactly 3 concrete, specific, debatable claims.\n\nFormat as JSON:\n{"claims": ["...", "...", "..."]}\nReturn ONLY the JSON.`,
           }],
         })
-
-        const text = completion.choices[0]?.message?.content ?? ''
         try {
-          const parsed = JSON.parse(text)
-          keyFacts = Array.isArray(parsed.keyFacts) ? parsed.keyFacts.slice(0, 3) : MOCK_BRIEF.keyFacts
-          openQuestions = Array.isArray(parsed.openQuestions) ? parsed.openQuestions.slice(0, 2) : MOCK_BRIEF.openQuestions
-          confidenceScore = typeof parsed.confidenceScore === 'number' ? parsed.confidenceScore : MOCK_BRIEF.confidenceScore
+          const parsed = JSON.parse(completion.choices[0]?.message?.content ?? '{}')
+          claims = Array.isArray(parsed.claims) ? parsed.claims.slice(0, 3) : MOCK_CLAIMS
         } catch {
-          keyFacts = MOCK_BRIEF.keyFacts
-          openQuestions = MOCK_BRIEF.openQuestions
-          confidenceScore = MOCK_BRIEF.confidenceScore
+          claims = MOCK_CLAIMS
         }
       }
 
-      console.log(`[researcher] → red-team | calling red_team skill via SAMVAD`)
-      const redTeamResult = await redTeamClient.call('red_team', { topic, keyFacts, openQuestions }) as {
-        assumptionsChallenged: string[]
-        gapsIdentified: string[]
-        reliabilityRating: 'high' | 'medium' | 'low'
-        verdict: string
+      // ── Step 2: Challenge each claim individually via SAMVAD ─────────────
+      const debates: { claim: string; rebuttal: string }[] = []
+      for (let i = 0; i < claims.length; i++) {
+        console.log(`[researcher] → red-team | challenge_claim ${i + 1}/${claims.length}`)
+        const { rebuttal } = await redTeamClient.call('challenge_claim', {
+          topic,
+          claim: claims[i],
+          claimIndex: i,
+        }) as { rebuttal: string }
+        debates.push({ claim: claims[i], rebuttal })
       }
+
+      // ── Step 3: Request overall verdict ──────────────────────────────────
+      console.log(`[researcher] → red-team | verdict`)
+      const { reliabilityRating, verdict } = await redTeamClient.call('verdict', {
+        topic,
+        claims,
+        rebuttals: debates.map(d => d.rebuttal),
+      }) as { reliabilityRating: 'high' | 'medium' | 'low'; verdict: string }
 
       return {
         topic,
-        keyFacts,
-        openQuestions,
-        confidenceScore,
-        redTeam: redTeamResult,
-        redTeamAgentId: redTeamClient.card?.id ?? 'unknown',
+        debates,
+        reliabilityRating,
+        verdict,
+        envelopeCount: claims.length + 1,
         traceId: ctx.traceId,
       }
     },
