@@ -21,7 +21,7 @@ You write a handler. The SDK handles everything else:
 | Concern | What the SDK does |
 |---|---|
 | Ed25519 keys | Generates, persists, and loads keypairs from `.samvad/keys/` |
-| Message signing | Signs every outbound envelope over canonical JSON |
+| Message signing | RFC 9421 HTTP Message Signatures (Ed25519 + Content-Digest) on every envelope |
 | Signature verification | Verifies every inbound signature against the sender's card |
 | Replay prevention | Tracks nonces in a 5-minute window |
 | Rate limiting | Per-sender sliding-window request limits + daily token budgets |
@@ -39,12 +39,28 @@ import {
   AgentClient,    // Call remote agents
   SamvadError,    // Protocol error class
   ErrorCode,      // Error code constants
-  // Types:
+
+  // Signing (RFC 9421)
+  signRequest, verifyRequest, computeContentDigest, parseKeyId,
+
+  // Keys
+  generateKeypair, saveKeypair, loadKeypair, encodePublicKey, decodePublicKey,
+
+  // Nonce replay protection
+  NonceStore,
+
+  // Injection scanning
+  scanObjectForInjection, wrapWithContentBoundary,
+
+  // Types
   AgentCard, SkillDef, MessageEnvelope, ResponseEnvelope,
   TaskRecord, TaskStatus, TrustTier, CommunicationMode,
-  SkillContext, PublicKey, RateLimit,
+  SkillContext, PublicKey, RateLimit, Keypair,
+  RequestSignatureHeaders, NonceCheckResult,
 } from '@samvad-protocol/sdk'
 ```
+
+The signing, key management, nonce store, and injection scanner modules are exported for use in custom agent implementations that don't use the `Agent` class (e.g. Next.js API routes, serverless functions).
 
 ## Next steps
 

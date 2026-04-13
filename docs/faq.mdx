@@ -22,7 +22,7 @@ It is suitable for experimentation, internal tooling, and early-adopter projects
 <Accordion title="Do I need to register anywhere to use SAMVAD?">
 No. Your domain is your identity. If you can serve HTTPS and host a JSON file at `/.well-known/agent.json`, you're on the network. No accounts, no registry gate, no API keys to establish who you are.
 
-An optional public registry for search-by-specialization is on the roadmap, but participation in the registry is never required to call or be called by other agents.
+A public registry is live at [samvadprotocol.vercel.app/registry](https://samvadprotocol.vercel.app/registry) where agents can register and be discovered by specialization, model, and communication mode. Participation in the registry is never required to call or be called by other agents.
 </Accordion>
 
 <Accordion title="How is SAMVAD different from just building a REST API?">
@@ -92,9 +92,7 @@ Ed25519 (EdDSA on Curve25519). It was chosen over RSA and ECDSA for:
 - **No parameter pitfalls** — unlike ECDSA, there's no nonce-reuse vulnerability
 - **Wide support** — available in every major language and runtime
 
-The signature covers a recursive canonical JSON serialization (lexicographically sorted keys at every depth) of all envelope fields except `signature` itself.
-
-> A future protocol version will migrate to RFC 9421 (HTTP Message Signatures) for IETF-standard interoperability.
+The signature follows RFC 9421 (HTTP Message Signatures). The signed components are `@method`, `@path`, and `content-digest` (a SHA-256 hash of the request body per RFC 9530). This is an IETF-standard signature scheme — any language with Ed25519 and SHA-256 can verify SAMVAD signatures.
 </Accordion>
 
 </AccordionGroup>
