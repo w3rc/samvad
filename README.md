@@ -7,7 +7,7 @@ Every team building multi-agent systems today hand-rolls auth, message signing, 
 [![npm](https://img.shields.io/npm/v/@samvad-protocol/sdk)](https://www.npmjs.com/package/@samvad-protocol/sdk)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](./LICENSE)
 [![Spec](https://img.shields.io/badge/spec-v1.2-green)](./spec/protocol-v1.2.md)
-[![Docs](https://img.shields.io/badge/docs-mintlify-brightgreen)](https://docs.samvadprotocol.com)
+[![Docs](https://img.shields.io/badge/docs-mintlify-brightgreen)](https://abcd-f0394a8a.mintlify.app)
 
 ---
 
