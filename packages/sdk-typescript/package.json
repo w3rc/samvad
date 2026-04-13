@@ -1,6 +1,6 @@
 {
   "name": "@samvad-protocol/sdk",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "TypeScript SDK for SAMVAD — Secure Agent Messaging, Verification And Discovery (The Open Sovereign Agent Dialogue Protocol)",
   "license": "Apache-2.0",
   "author": "The SAMVAD Authors",

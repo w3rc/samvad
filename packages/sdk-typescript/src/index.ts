@@ -9,6 +9,17 @@ export type { AgentClientOptions } from './agent-client.js'
 export { SamvadError, ErrorCode } from './errors.js'
 export type { ErrorCodeType } from './errors.js'
 
+export { generateKeypair, saveKeypair, loadKeypair, encodePublicKey, decodePublicKey } from './keys.js'
+export type { Keypair } from './keys.js'
+
+export { computeContentDigest, parseKeyId, signRequest, verifyRequest } from './signing.js'
+export type { RequestSignatureHeaders } from './signing.js'
+
+export { NonceStore } from './nonce-store.js'
+export type { NonceCheckResult } from './nonce-store.js'
+
+export { scanObjectForInjection, wrapWithContentBoundary } from './injection-scanner.js'
+
 export type {
   AgentCard,
   SkillDef,
