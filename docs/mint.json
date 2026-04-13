@@ -57,6 +57,13 @@
       ]
     },
     {
+      "group": "Integrations",
+      "pages": [
+        "integrations/openclaw",
+        "integrations/langchain"
+      ]
+    },
+    {
       "group": "Protocol Spec",
       "pages": [
         "protocol/overview",
