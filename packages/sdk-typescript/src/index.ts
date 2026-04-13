@@ -20,6 +20,9 @@ export type { NonceCheckResult } from './nonce-store.js'
 
 export { scanObjectForInjection, wrapWithContentBoundary } from './injection-scanner.js'
 
+export { createVerifyMiddleware } from './verify-middleware.js'
+export type { VerifyMiddlewareConfig, VerifiedRequest, VerifyError, VerifyResult } from './verify-middleware.js'
+
 export type {
   AgentCard,
   SkillDef,
