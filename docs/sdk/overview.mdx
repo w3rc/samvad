@@ -52,15 +52,44 @@ import {
   // Injection scanning
   scanObjectForInjection, wrapWithContentBoundary,
 
+  // Verify middleware (for Next.js / serverless agents)
+  createVerifyMiddleware,
+
   // Types
   AgentCard, SkillDef, MessageEnvelope, ResponseEnvelope,
   TaskRecord, TaskStatus, TrustTier, CommunicationMode,
   SkillContext, PublicKey, RateLimit, Keypair,
   RequestSignatureHeaders, NonceCheckResult,
+  VerifyMiddlewareConfig, VerifiedRequest, VerifyError, VerifyResult,
 } from '@samvad-protocol/sdk'
 ```
 
 The signing, key management, nonce store, and injection scanner modules are exported for use in custom agent implementations that don't use the `Agent` class (e.g. Next.js API routes, serverless functions).
+
+## Building agents without Fastify
+
+The `Agent` class uses Fastify under the hood. If you're building on Next.js, Express, or serverless functions, use `createVerifyMiddleware` instead — it gives you the full protocol verification pipeline (nonce, rate limit, signature, trust tier) as a framework-agnostic function:
+
+```typescript
+import { createVerifyMiddleware } from '@samvad-protocol/sdk'
+
+const verify = createVerifyMiddleware({
+  agentId: 'agent://my-agent.com',
+  skills: myCard.skills,
+  rateLimiter: (ip) => ({ allowed: true }), // plug in your own
+})
+
+// In any route handler (Next.js, Express, etc.):
+const result = await verify('POST', '/agent/message', bodyBytes, req.headers, clientIp)
+if (!result.ok) {
+  // result.error has { status, code, message }
+  return Response.json(result.error, { status: result.error.status })
+}
+const { envelope, spanId } = result.data
+// envelope is a verified MessageEnvelope — handle the skill call
+```
+
+This is what the [Scout](https://github.com/w3rc/samvad-agents/tree/main/agents/scout), [Claw](https://github.com/w3rc/samvad-agents/tree/main/agents/claw), and [Research](https://github.com/w3rc/samvad-agents/tree/main/agents/research) agents use internally.
 
 ## Next steps
 

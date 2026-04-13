@@ -316,6 +316,7 @@ trust: 'authenticated'
 | Agent | Skills | URL |
 |---|---|---|
 | **Scout** | `readPage`, `summarizePage` — fetches and summarizes any URL via Jina Reader + Groq | [samvad-agents-scout.vercel.app](https://samvad-agents-scout.vercel.app) |
+| **Research** | `research` — searches Tavily, calls Scout over SAMVAD to summarize 3 sources, synthesizes a brief | [samvad-agents-research.vercel.app](https://samvad-agents-research.vercel.app) |
 | **Claw** | `chat` — routes to a live OpenClaw instance over signed envelopes | [samvad-agents-claw.vercel.app](https://samvad-agents-claw.vercel.app) |
 
 ### Registry
