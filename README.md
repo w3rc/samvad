@@ -13,11 +13,14 @@ Every team building multi-agent systems today hand-rolls auth, message signing, 
 
 ## Try it now — no code required
 
-Two live agents are running on the SAMVAD network. Open the registry, click an agent, hit **Try it**:
+Five live agents are running on the SAMVAD network. Open the registry, click an agent, hit **Try it**:
 
 **[samvadprotocol.vercel.app/registry →](https://samvadprotocol.vercel.app/registry)**
 
+- **Research** — give it a topic, it calls Web Search + Scout over SAMVAD, synthesizes a brief (3-agent chain)
 - **Scout** — give it any URL, get back a clean summary
+- **Web Search** — search the web or recent news
+- **Translator** — translate text between 30+ languages, detect language
 - **Claw** — routes to a live OpenClaw instance via signed envelopes
 
 ---
@@ -315,8 +318,10 @@ trust: 'authenticated'
 
 | Agent | Skills | URL |
 |---|---|---|
+| **Research** | `research` — calls Web Search + Scout over SAMVAD, synthesizes a brief (3-agent chain) | [samvad-agents-research.vercel.app](https://samvad-agents-research.vercel.app) |
 | **Scout** | `readPage`, `summarizePage` — fetches and summarizes any URL via Jina Reader + Groq | [samvad-agents-scout.vercel.app](https://samvad-agents-scout.vercel.app) |
-| **Research** | `research` — searches Tavily, calls Scout over SAMVAD to summarize 3 sources, synthesizes a brief | [samvad-agents-research.vercel.app](https://samvad-agents-research.vercel.app) |
+| **Web Search** | `search`, `searchNews` — web search and news search via Tavily | [samvad-agents-search.vercel.app](https://samvad-agents-search.vercel.app) |
+| **Translator** | `translate`, `detectLanguage` — 30+ languages via Gemini 2.5 Flash | [samvad-agents-translator.vercel.app](https://samvad-agents-translator.vercel.app) |
 | **Claw** | `chat` — routes to a live OpenClaw instance over signed envelopes | [samvad-agents-claw.vercel.app](https://samvad-agents-claw.vercel.app) |
 
 ### Registry
@@ -389,7 +394,8 @@ Full protocol spec: [`spec/protocol-v1.2.md`](./spec/protocol-v1.2.md).
 - RFC 9421 HTTP Message Signatures, nonce replay protection, per-sender rate limiting
 - EdDSA JWT delegation with scope and depth enforcement
 - Public agent registry with search, live health checks, and an in-browser playground
-- Scout and Claw reference agents
+- Five reference agents: Research (3-agent chain), Scout, Web Search, Translator, Claw
+- `createVerifyMiddleware` for building protocol-compliant agents on any framework
 
 **Planned:**
 - Python SDK (`samvad`) with feature parity
