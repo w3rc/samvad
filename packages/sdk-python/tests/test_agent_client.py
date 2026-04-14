@@ -7,10 +7,8 @@ entirely in-process — no real network required.
 from __future__ import annotations
 
 import asyncio
-import json
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -18,8 +16,7 @@ from pydantic import BaseModel
 
 from samvad.agent import Agent
 from samvad.agent_client import AgentClient
-from samvad.types import AgentCard, RateLimit, SkillContext
-
+from samvad.types import AgentCard, SkillContext
 
 # ---------------------------------------------------------------------------
 # Pydantic schemas
@@ -185,10 +182,7 @@ class TestCall:
                 return await h.post(path, content=content, headers=headers, timeout=timeout)
 
         # Use monkey-patching approach: override httpx.AsyncClient inside call()
-        original_call = client.call
-
         async def call_via_asgi(skill: str, payload: dict[str, Any]) -> dict[str, Any]:
-            from samvad.signing import canonical_json, content_digest, sign_request
             env = client._build_envelope(skill, payload, mode="sync")
             raw_body, headers = client._sign_envelope(env, "POST", "/agent/message")
             async with httpx.AsyncClient(

@@ -5,14 +5,15 @@ import asyncio
 import json
 import time
 import uuid
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
 import httpx
 
 from .keys import Keypair, load_or_generate_keypair
 from .signing import canonical_json, content_digest, sign_request
-from .types import AgentCard, MessageEnvelope
+from .types import AgentCard
 
 
 class AgentClient:
@@ -26,7 +27,7 @@ class AgentClient:
         *,
         keys_dir: str = ".samvad/client-keys/",
         kid: str = "client",
-    ) -> "AgentClient":
+    ) -> AgentClient:
         kp = load_or_generate_keypair(Path(keys_dir), kid)
         return cls(keypair=kp)
 
@@ -37,7 +38,7 @@ class AgentClient:
         *,
         keys_dir: str = ".samvad/client-keys/",
         kid: str = "client",
-    ) -> "AgentClient":
+    ) -> AgentClient:
         client = cls.prepare(keys_dir=keys_dir, kid=kid)
         await client.connect(url)
         return client
@@ -118,7 +119,9 @@ class AgentClient:
         env = self._build_envelope(skill, payload, mode="async", callback_url=callback_url)
         raw_body, headers = self._sign_envelope(env, "POST", "/agent/task")
         async with httpx.AsyncClient() as h:
-            resp = await h.post(f"{base_url}/agent/task", content=raw_body, headers=headers, timeout=30)
+            resp = await h.post(
+                f"{base_url}/agent/task", content=raw_body, headers=headers, timeout=30
+            )
             resp.raise_for_status()
             return resp.json()["taskId"]
 

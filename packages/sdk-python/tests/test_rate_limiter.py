@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 import pytest
-from samvad.rate_limiter import RateLimiter
+
 from samvad.errors import ErrorCode, SamvadError
+from samvad.rate_limiter import RateLimiter
 
 
 def test_allows_requests_within_limit():

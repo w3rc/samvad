@@ -9,13 +9,19 @@ import re
 from typing import Any
 
 _INJECTION_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|context)", re.IGNORECASE),
+    re.compile(
+        r"ignore\s+(all\s+)?(previous|prior|above)\s+(instructions?|prompts?|context)",
+        re.IGNORECASE,
+    ),
     re.compile(r"disregard\s+(your\s+)?(system\s+prompt|instructions?|context)", re.IGNORECASE),
     re.compile(r"you\s+are\s+now\s+(a\s+)?(?!processing|analyzing|reviewing)", re.IGNORECASE),
     re.compile(r"forget\s+(everything|all|your\s+instructions)", re.IGNORECASE),
     re.compile(r"new\s+instruction[s]?:", re.IGNORECASE),
     re.compile(r"\[system\]", re.IGNORECASE),
-    re.compile(r"override\s+(your\s+)?(previous\s+)?(instructions?|behavior|directives?)", re.IGNORECASE),
+    re.compile(
+        r"override\s+(your\s+)?(previous\s+)?(instructions?|behavior|directives?)",
+        re.IGNORECASE,
+    ),
     re.compile(r"act\s+as\s+if\s+you\s+(have\s+no|are\s+not)", re.IGNORECASE),
     re.compile(r"jailbreak", re.IGNORECASE),
     re.compile(r"do\s+anything\s+now", re.IGNORECASE),

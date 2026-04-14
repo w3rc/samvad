@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-import json
 from pathlib import Path
 
 from samvad.keys import load_or_generate_keypair

@@ -3,15 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
-import pytest
 from pydantic import BaseModel
 from starlette.applications import Starlette
 
 from samvad.agent import Agent
 from samvad.types import RateLimit, SkillContext
-
 
 # ---------------------------------------------------------------------------
 # Pydantic schemas

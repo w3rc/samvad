@@ -1,5 +1,4 @@
 # SPDX-License-Identifier: Apache-2.0
-import pytest
 from samvad.injection_scanner import scan_object_for_injection, wrap_with_content_boundary
 
 

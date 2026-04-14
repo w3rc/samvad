@@ -2,8 +2,8 @@
 import pytest
 from pydantic import BaseModel
 
-from samvad.skill_registry import SkillRegistry
 from samvad.errors import ErrorCode, SamvadError
+from samvad.skill_registry import SkillRegistry
 from samvad.types import SkillContext
 
 

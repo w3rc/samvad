@@ -7,7 +7,7 @@ import json
 import logging
 import time as _time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -181,7 +181,9 @@ def build_app(config: ServerConfig) -> Starlette:
         if not _verify_body_digest(headers, raw_body):
             return JSONResponse(
                 {"traceId": "", "spanId": span_id, "status": "error",
-                 "error": {"code": ErrorCode.AUTH_FAILED.value, "message": "Content-Digest mismatch"}},
+                 "error": {
+                     "code": ErrorCode.AUTH_FAILED.value, "message": "Content-Digest mismatch"
+                 }},
                 status_code=401,
             )
 
@@ -210,7 +212,8 @@ def build_app(config: ServerConfig) -> Starlette:
             })
         except SamvadError as e:
             return JSONResponse(
-                {"traceId": envelope.trace_id, "spanId": span_id, "status": "error", "error": e.to_dict()},
+                {"traceId": envelope.trace_id, "spanId": span_id,
+                 "status": "error", "error": e.to_dict()},
                 status_code=status_code_for(e.code),
             )
         except Exception as e:
@@ -232,7 +235,9 @@ def build_app(config: ServerConfig) -> Starlette:
         if not _verify_body_digest(headers, raw_body):
             return JSONResponse(
                 {"traceId": "", "spanId": span_id, "status": "error",
-                 "error": {"code": ErrorCode.AUTH_FAILED.value, "message": "Content-Digest mismatch"}},
+                 "error": {
+                     "code": ErrorCode.AUTH_FAILED.value, "message": "Content-Digest mismatch"
+                 }},
                 status_code=401,
             )
 
@@ -266,20 +271,28 @@ def build_app(config: ServerConfig) -> Starlette:
             except Exception:
                 return JSONResponse(
                     {"traceId": "", "spanId": span_id, "status": "error",
-                     "error": {"code": ErrorCode.SCHEMA_INVALID.value, "message": "callbackUrl is not a valid URL"}},
+                     "error": {
+                         "code": ErrorCode.SCHEMA_INVALID.value,
+                         "message": "callbackUrl is not a valid URL",
+                     }},
                     status_code=400,
                 )
             if parsed.scheme != "https":
                 return JSONResponse(
                     {"traceId": "", "spanId": span_id, "status": "error",
-                     "error": {"code": ErrorCode.SCHEMA_INVALID.value, "message": "callbackUrl must use https"}},
+                     "error": {
+                         "code": ErrorCode.SCHEMA_INVALID.value,
+                         "message": "callbackUrl must use https",
+                     }},
                     status_code=400,
                 )
             if _is_private_host(parsed.hostname or ""):
                 return JSONResponse(
                     {"traceId": "", "spanId": span_id, "status": "error",
-                     "error": {"code": ErrorCode.SCHEMA_INVALID.value,
-                               "message": "callbackUrl must not target a private or loopback address"}},
+                     "error": {
+                         "code": ErrorCode.SCHEMA_INVALID.value,
+                         "message": "callbackUrl must not target a private or loopback address",
+                     }},
                     status_code=400,
                 )
 
@@ -312,7 +325,9 @@ def build_app(config: ServerConfig) -> Starlette:
         if not _verify_body_digest(headers, raw_body):
             return JSONResponse(
                 {"traceId": "", "spanId": span_id, "status": "error",
-                 "error": {"code": ErrorCode.AUTH_FAILED.value, "message": "Content-Digest mismatch"}},
+                 "error": {
+                     "code": ErrorCode.AUTH_FAILED.value, "message": "Content-Digest mismatch"
+                 }},
                 status_code=401,
             )
 
@@ -335,9 +350,15 @@ def build_app(config: ServerConfig) -> Starlette:
         async def event_generator():
             try:
                 output = await config.registry.dispatch(envelope.skill, envelope.payload, ctx)
-                yield {"done": True, "result": output, "traceId": envelope.trace_id, "spanId": span_id}
+                yield {
+                    "done": True, "result": output,
+                    "traceId": envelope.trace_id, "spanId": span_id,
+                }
             except SamvadError as e:
-                yield {"done": True, "error": e.to_dict(), "traceId": envelope.trace_id, "spanId": span_id}
+                yield {
+                    "done": True, "error": e.to_dict(),
+                    "traceId": envelope.trace_id, "spanId": span_id,
+                }
             except Exception as e:
                 yield {
                     "done": True,

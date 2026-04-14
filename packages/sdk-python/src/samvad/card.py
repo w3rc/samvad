@@ -1,7 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
 from urllib.parse import urlparse
 
-from .types import AgentCard, AgentCardAuth, AgentCardEndpoints, AgentCardModel, PublicKey, RateLimit, SkillDef
+from .types import (
+    AgentCard,
+    AgentCardAuth,
+    AgentCardEndpoints,
+    AgentCardModel,
+    PublicKey,
+    RateLimit,
+    SkillDef,
+)
 
 
 def build_agent_card(

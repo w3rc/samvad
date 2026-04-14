@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 import json
-import pytest
-from samvad.errors import SamvadError, ErrorCode
+
+from samvad.errors import ErrorCode, SamvadError
 
 
 def test_error_carries_code_and_message():

@@ -1,7 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import asyncio
 import json
 from collections.abc import AsyncGenerator
 from typing import Any

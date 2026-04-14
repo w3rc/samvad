@@ -8,19 +8,17 @@ from __future__ import annotations
 
 import asyncio
 import json
-import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 import httpx
-import pytest
 from pydantic import BaseModel
 
 from samvad.card import build_agent_card
 from samvad.errors import ErrorCode
-from samvad.keys import load_or_generate_keypair, Keypair
+from samvad.keys import Keypair, load_or_generate_keypair
 from samvad.nonce_store import InMemoryNonceStore
 from samvad.rate_limiter import RateLimiter
 from samvad.server import ServerConfig, build_app
@@ -28,7 +26,6 @@ from samvad.signing import canonical_json, content_digest, sign_request
 from samvad.skill_registry import SkillRegistry
 from samvad.task_store import TaskStore
 from samvad.types import PublicKey, RateLimit, SkillContext
-
 
 # ---------------------------------------------------------------------------
 # Pydantic schemas for the echo skill
@@ -339,7 +336,9 @@ class TestSyncMessage:
     async def test_unknown_skill_404(self, tmp_path):
         config, kp = make_config(tmp_path)
         app = build_app(config)
-        path, headers, raw_body = make_signed_request_parts(kp, skill="nonexistent", payload={"text": "x"})
+        path, headers, raw_body = make_signed_request_parts(
+            kp, skill="nonexistent", payload={"text": "x"}
+        )
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://test"
         ) as client:
@@ -682,7 +681,9 @@ class TestTrustTiers:
 
         config, kp = make_config(tmp_path, registry=reg)
         app = build_app(config)
-        path, headers, raw_body = make_signed_request_parts(kp, skill="admin", payload={"cmd": "run"})
+        path, headers, raw_body = make_signed_request_parts(
+            kp, skill="admin", payload={"cmd": "run"}
+        )
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app), base_url="http://test"
         ) as client:

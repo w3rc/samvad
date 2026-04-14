@@ -4,7 +4,6 @@ from __future__ import annotations
 from samvad.card import build_agent_card
 from samvad.types import PublicKey, RateLimit, SkillDef
 
-
 PUBLIC_KEYS = [PublicKey(kid="key-1", key="base64key", active=True)]
 SKILLS = [
     SkillDef(

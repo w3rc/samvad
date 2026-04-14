@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
 from .errors import ErrorCode, SamvadError
 from .types import CommunicationMode, SkillContext, SkillDef, TrustTier
-
 
 Handler = Callable[[BaseModel, SkillContext], Awaitable[BaseModel]]
 

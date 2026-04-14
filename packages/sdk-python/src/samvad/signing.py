@@ -10,7 +10,6 @@ from typing import Any
 
 from .keys import sign_raw, verify_raw
 
-
 # Covered components in EXACTLY this order — changing order breaks cross-SDK compat
 # Must match the TS SDK: ("@method" "@path" "content-digest") only
 COVERED_COMPONENTS: tuple[str, ...] = (

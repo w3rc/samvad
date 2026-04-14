@@ -85,7 +85,9 @@ def verify_token(token: str, *, issuer_public_key_b64: str) -> dict[str, Any]:
             options={"require": ["iss", "sub", "exp", "iat"]},
         )
     except jwt.PyJWTError as exc:
-        raise SamvadError(ErrorCode.AUTH_FAILED, f"Invalid or expired delegation token: {exc}") from exc
+        raise SamvadError(
+            ErrorCode.AUTH_FAILED, f"Invalid or expired delegation token: {exc}"
+        ) from exc
 
     # Validate scope claim
     if not isinstance(payload.get("scope"), list) or not all(
@@ -95,7 +97,9 @@ def verify_token(token: str, *, issuer_public_key_b64: str) -> dict[str, Any]:
 
     # Validate maxDepth claim
     if not isinstance(payload.get("maxDepth"), int):
-        raise SamvadError(ErrorCode.AUTH_FAILED, "Delegation token missing or invalid maxDepth claim")
+        raise SamvadError(
+            ErrorCode.AUTH_FAILED, "Delegation token missing or invalid maxDepth claim"
+        )
 
     max_depth: int = payload["maxDepth"]
     if max_depth <= 0:
@@ -126,7 +130,9 @@ def chain_token(
     parent_claims = verify_token(parent_token, issuer_public_key_b64=issuer_public_key_b64)
     new_max_depth = parent_claims["maxDepth"] - 1
     if new_max_depth <= 0:
-        raise SamvadError(ErrorCode.DELEGATION_EXCEEDED, "Delegation depth limit reached after chaining")
+        raise SamvadError(
+            ErrorCode.DELEGATION_EXCEEDED, "Delegation depth limit reached after chaining"
+        )
 
     # Build act claim from parent payload
     act: dict[str, Any] = {"sub": parent_claims["sub"]}

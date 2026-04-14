@@ -11,7 +11,7 @@ import httpx
 import pytest
 from pydantic import BaseModel
 
-from samvad import Agent, SkillContext
+from samvad import SkillContext
 from samvad.card import build_agent_card
 from samvad.keys import load_or_generate_keypair
 from samvad.nonce_store import InMemoryNonceStore

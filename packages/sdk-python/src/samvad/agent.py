@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-import asyncio
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -64,7 +64,7 @@ class Agent:
         trust: TrustTier,
         handler: Callable[[BaseModel, SkillContext], Awaitable[BaseModel]],
         allowed_peers: list[str] | None = None,
-    ) -> "Agent":
+    ) -> Agent:
         self._registry.register(
             name=name,
             description=description,
@@ -77,7 +77,7 @@ class Agent:
         )
         return self
 
-    def trust_peer(self, agent_id: str, public_key_b64: str) -> "Agent":
+    def trust_peer(self, agent_id: str, public_key_b64: str) -> Agent:
         self._known_peers[agent_id] = public_key_b64
         return self
 
