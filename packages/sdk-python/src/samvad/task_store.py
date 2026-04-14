@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 
@@ -17,7 +18,10 @@ class TaskStore:
         self._tasks: dict[str, TaskRecord] = {}
 
     def _is_expired(self, task: TaskRecord) -> bool:
-        return (time.time() - task.created_at) > self._retention
+        now = time.time()
+        if task.status in ("done", "failed") and task.completed_at is not None:
+            return (now - task.completed_at) > self._retention
+        return (now - task.created_at) > self._retention
 
     def create_task(self, task_id: str | None = None) -> TaskRecord:
         """Create a new task in 'pending' state."""
@@ -64,3 +68,11 @@ class TaskStore:
         expired = [tid for tid, t in self._tasks.items() if self._is_expired(t)]
         for tid in expired:
             del self._tasks[tid]
+
+    async def start_background_sweep(self, sweep_interval_seconds: int = 300) -> None:
+        """Start background task to evict expired entries every N seconds."""
+        async def _run() -> None:
+            while True:
+                await asyncio.sleep(sweep_interval_seconds)
+                self.sweep()
+        asyncio.create_task(_run())

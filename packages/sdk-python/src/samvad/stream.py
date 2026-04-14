@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import AsyncGenerator
 from typing import Any
 
@@ -19,6 +20,6 @@ def sse_response(
     """
     async def event_stream() -> AsyncGenerator[dict[str, Any], None]:
         async for chunk in generator:
-            yield {"data": chunk}
+            yield {"data": json.dumps(chunk, ensure_ascii=False)}
 
     return EventSourceResponse(event_stream(), ping=ping_seconds)

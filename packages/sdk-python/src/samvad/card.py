@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
+from urllib.parse import urlparse
+
 from .types import AgentCard, AgentCardAuth, AgentCardEndpoints, AgentCardModel, PublicKey, RateLimit, SkillDef
 
 
 def build_agent_card(
     *,
-    agent_id: str,
+    agent_id: str | None = None,
     name: str,
     version: str,
     description: str,
@@ -16,6 +18,14 @@ def build_agent_card(
     rate_limit: RateLimit,
     card_ttl: int = 300,
 ) -> AgentCard:
+    if not agent_id:
+        domain = urlparse(url).hostname or "unknown"
+        agent_id = f"agent://{domain}"
+
+    has_authenticated_skill = any(s.trust == "authenticated" for s in skills)
+    auth_schemes = ["bearer", "none"] if has_authenticated_skill else ["none"]
+    auth = AgentCardAuth(schemes=auth_schemes)
+
     base = url.rstrip("/")
     return AgentCard(
         id=agent_id,
@@ -28,7 +38,7 @@ def build_agent_card(
         models=[AgentCardModel(**m) if isinstance(m, dict) else m for m in models],
         skills=skills,
         publicKeys=public_keys,
-        auth=AgentCardAuth(schemes=["ed25519-rfc9421"]),
+        auth=auth,
         rateLimit=rate_limit,
         cardTTL=card_ttl,
         endpoints=AgentCardEndpoints(

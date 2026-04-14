@@ -76,7 +76,8 @@ def test_protocol_version_is_1_2():
     assert card.protocol_version == "1.2"
 
 
-def test_auth_scheme_set():
+def test_auth_scheme_public_skills_only():
+    # When all skills are public (or no skills), auth should be ["none"]
     card = build_agent_card(
         agent_id="agent://x.com",
         name="X",
@@ -89,7 +90,63 @@ def test_auth_scheme_set():
         public_keys=PUBLIC_KEYS,
         rate_limit=RATE_LIMIT,
     )
-    assert "ed25519-rfc9421" in card.auth.schemes
+    assert card.auth.schemes == ["none"]
+
+
+def test_auth_scheme_with_authenticated_skill():
+    authenticated_skill = SkillDef(
+        id="secret",
+        name="Secret",
+        description="Requires auth",
+        inputSchema={"type": "object"},
+        outputSchema={"type": "object"},
+        modes=["sync"],
+        trust="authenticated",
+    )
+    card = build_agent_card(
+        agent_id="agent://x.com",
+        name="X",
+        version="1.0.0",
+        description="d",
+        url="https://x.com",
+        specializations=[],
+        models=[],
+        skills=[authenticated_skill],
+        public_keys=PUBLIC_KEYS,
+        rate_limit=RATE_LIMIT,
+    )
+    assert card.auth.schemes == ["bearer", "none"]
+
+
+def test_auto_derive_agent_id_from_url():
+    card = build_agent_card(
+        name="Auto ID Agent",
+        version="1.0.0",
+        description="d",
+        url="https://myagent.example.com",
+        specializations=[],
+        models=[],
+        skills=[],
+        public_keys=PUBLIC_KEYS,
+        rate_limit=RATE_LIMIT,
+    )
+    assert card.id == "agent://myagent.example.com"
+
+
+def test_explicit_agent_id_takes_precedence():
+    card = build_agent_card(
+        agent_id="agent://custom-id",
+        name="X",
+        version="1.0.0",
+        description="d",
+        url="https://myagent.example.com",
+        specializations=[],
+        models=[],
+        skills=[],
+        public_keys=PUBLIC_KEYS,
+        rate_limit=RATE_LIMIT,
+    )
+    assert card.id == "agent://custom-id"
 
 
 def test_skills_passed_through():

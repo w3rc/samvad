@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import asyncio
 import time
 
 import pytest
@@ -87,4 +88,33 @@ def test_sweep_removes_expired_tasks():
     store = TaskStore(retention_seconds=0)
     task = store.create_task()
     store.sweep()
+    assert store.get_task(task.task_id) is None
+
+
+def test_completed_task_expires_based_on_completed_at():
+    # A task completed long ago should be expired even if created recently
+    store = TaskStore(retention_seconds=3600)
+    task = store.create_task()
+    # Manually set completed_at far in the past by updating via update_task
+    store.update_task(task.task_id, status="done", result={}, completed_at=int(time.time()) - 7200)
+    result = store.get_task(task.task_id)
+    assert result is None
+
+
+def test_pending_task_expires_based_on_created_at():
+    # A pending task with no completed_at uses created_at for expiry
+    store = TaskStore(retention_seconds=0)
+    task = store.create_task()
+    result = store.get_task(task.task_id)
+    assert result is None
+
+
+@pytest.mark.asyncio
+async def test_background_sweep_evicts_expired_task():
+    store = TaskStore(retention_seconds=0)
+    task = store.create_task()
+    # Start background sweep with a very short interval (0.05 seconds)
+    await store.start_background_sweep(sweep_interval_seconds=0)
+    # Give the sweep loop a chance to run
+    await asyncio.sleep(0.1)
     assert store.get_task(task.task_id) is None
