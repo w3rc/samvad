@@ -17,7 +17,7 @@ class ErrorCode(str, Enum):
 class SamvadError(Exception):
     def __init__(self, code: ErrorCode, message: str) -> None:
         super().__init__(message)
-        self.code: str = code.value if isinstance(code, ErrorCode) else code
+        self.code: str = code.value
         self.message = message
 
     def to_dict(self) -> dict[str, str]:

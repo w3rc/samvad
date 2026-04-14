@@ -17,7 +17,7 @@ InjectionClassifier = Callable[[dict[str, Any]], "Awaitable[bool] | bool"]
 
 
 class PublicKey(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
 
     kid: str
     key: str  # base64-encoded Ed25519 public key
@@ -25,7 +25,7 @@ class PublicKey(BaseModel):
 
 
 class RateLimit(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
 
     requests_per_minute: int = Field(..., alias="requestsPerMinute")
     requests_per_sender: int = Field(..., alias="requestsPerSender")
@@ -33,7 +33,7 @@ class RateLimit(BaseModel):
 
 
 class SkillDef(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
 
     id: str
     name: str
@@ -46,20 +46,20 @@ class SkillDef(BaseModel):
 
 
 class AgentCardModel(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
 
     provider: str
     model: str
 
 
 class AgentCardAuth(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
 
     schemes: list[str]
 
 
 class AgentCardEndpoints(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
 
     intro: str
     message: str
@@ -70,7 +70,7 @@ class AgentCardEndpoints(BaseModel):
 
 
 class AgentCard(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
 
     id: str  # agent://domain
     name: str
@@ -89,14 +89,14 @@ class AgentCard(BaseModel):
 
 
 class MessageEnvelopeAuth(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
 
     scheme: str
     token: str
 
 
 class MessageEnvelope(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
 
     from_: str = Field(..., alias="from")
     to: str
@@ -113,14 +113,14 @@ class MessageEnvelope(BaseModel):
 
 
 class ResponseEnvelopeError(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
 
     code: str
     message: str
 
 
 class ResponseEnvelope(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
 
     trace_id: str = Field(..., alias="traceId")
     span_id: str = Field(..., alias="spanId")
@@ -130,14 +130,14 @@ class ResponseEnvelope(BaseModel):
 
 
 class TaskRecordError(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
 
     code: str
     message: str
 
 
 class TaskRecord(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, by_alias=True)
 
     task_id: str = Field(..., alias="taskId")
     status: TaskStatus
@@ -149,9 +149,7 @@ class TaskRecord(BaseModel):
 
 
 class SkillContext(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
     sender: str  # verified agent:// ID of caller
-    trace_id: str = Field(..., alias="traceId")
-    span_id: str = Field(..., alias="spanId")
-    delegation_token: str | None = Field(None, alias="delegationToken")
+    trace_id: str
+    span_id: str
+    delegation_token: str | None = None
