@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "basic-agent-py"
+version = "0.1.0"
+description = "Minimal SAMVAD Python agent example"
+requires-python = ">=3.10"
+dependencies = [
+  "samvad>=0.1.0",
+  "uvicorn>=0.29",
+]
+
+[project.optional-dependencies]
+dev = ["samvad @ file:../../packages/sdk-python"]

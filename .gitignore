@@ -4,6 +4,7 @@ dist/
 
 # Never commit cryptographic private keys
 .samvad/
+spec/test-vectors/keys/
 
 # Superpowers workflow artifacts (brainstorm state, specs, plans)
 .superpowers/
@@ -11,4 +12,4 @@ docs/superpowers/
 
 # Personal working notes — not part of the public repo
 TODO.md
-.playwright-mcp/
+.playwright-mcp/.worktrees/
