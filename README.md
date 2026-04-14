@@ -417,9 +417,9 @@ Full protocol spec: [`spec/protocol-v1.2.md`](./spec/protocol-v1.2.md).
 - Public agent registry with search, live health checks, and an in-browser playground
 - Five reference agents: Research (3-agent chain), Scout, Web Search, Translator, Claw
 - `createVerifyMiddleware` for building protocol-compliant agents on any framework
+- Python SDK (`samvad`) with full protocol v1.2 parity (147 tests, cross-SDK signing vectors)
 
 **Planned:**
-- Python SDK (`samvad`) with feature parity
 - Built-in LLM classifier adapters (LLM Guard, Guardrails AI)
 - Formal language-agnostic protocol spec repository
 
