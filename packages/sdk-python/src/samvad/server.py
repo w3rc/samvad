@@ -53,7 +53,7 @@ def status_code_for(code: str) -> int:
         "DELEGATION_EXCEEDED": 400,
         "AGENT_UNAVAILABLE": 503,
     }
-    return mapping.get(code, 500)
+    return mapping.get(code, 400)
 
 
 def _verify_body_digest(headers: dict[str, str], raw_body: bytes) -> bool:
@@ -220,7 +220,15 @@ def build_app(config: ServerConfig) -> Starlette:
                 status_code=401,
             )
 
-        # Parse body to extract callbackUrl before verification
+        result = await verify("POST", "/agent/task", headers, raw_body)
+        if not result.ok:
+            err = result.error
+            return JSONResponse(
+                {"traceId": "", "spanId": span_id, "status": "error", "error": err.to_dict()},
+                status_code=status_code_for(err.code),
+            )
+
+        # Extract callbackUrl AFTER verify — envelope is authenticated at this point
         try:
             body_dict: dict[str, Any] = json.loads(raw_body)
         except Exception:
@@ -232,7 +240,7 @@ def build_app(config: ServerConfig) -> Starlette:
 
         callback_url: str | None = body_dict.get("callbackUrl")
 
-        # Validate callbackUrl before doing any work — prevents SSRF via internal URLs
+        # Validate callbackUrl — prevents SSRF via internal URLs
         if callback_url is not None:
             try:
                 from urllib.parse import urlparse
@@ -259,20 +267,12 @@ def build_app(config: ServerConfig) -> Starlette:
                     status_code=400,
                 )
 
-        result = await verify("POST", "/agent/task", headers, raw_body)
-        if not result.ok:
-            err = result.error
-            return JSONResponse(
-                {"traceId": "", "spanId": span_id, "status": "error", "error": err.to_dict()},
-                status_code=status_code_for(err.code),
-            )
-
         task = config.task_store.create_task()
 
         # Dispatch background task — response returns 202 before handler runs
         asyncio.create_task(_run_task(
             task.task_id,
-            body_dict,
+            result.envelope.model_dump(by_alias=True),
             span_id,
             config.registry,
             config.task_store,
