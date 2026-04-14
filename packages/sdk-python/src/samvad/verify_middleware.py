@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import datetime
 import json
 import logging
 from dataclasses import dataclass, field
@@ -56,26 +57,25 @@ def create_verify_middleware(
         try:
             body_dict: dict[str, Any] = json.loads(raw_body)
             envelope = MessageEnvelope.model_validate(body_dict)
-        except Exception as e:
+        except Exception:
             return VerifyResult(
                 ok=False,
-                error=SamvadError(ErrorCode.SCHEMA_INVALID, f"invalid envelope: {e}"),
+                error=SamvadError(ErrorCode.SCHEMA_INVALID, "invalid request envelope"),
             )
 
         sender = envelope.from_
         skill_name = envelope.skill
 
-        # --- Step 1: Nonce + timestamp ---
-        import datetime
+        # --- Step 1: Nonce + timestamp (non-mutating check) ---
         try:
             ts_str = envelope.timestamp
             ts_dt = datetime.datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
             ts_unix = int(ts_dt.timestamp())
         except Exception:
-            return VerifyResult(ok=False, error=SamvadError(ErrorCode.REPLAY_DETECTED, "invalid timestamp"))
+            return VerifyResult(ok=False, error=SamvadError(ErrorCode.SCHEMA_INVALID, "invalid timestamp format"))
 
-        ok = await nonce_store.check_and_add(sender, envelope.nonce, ts_unix)
-        if not ok:
+        nonce_fresh = await nonce_store.check(sender, envelope.nonce, ts_unix)
+        if not nonce_fresh:
             return VerifyResult(ok=False, error=SamvadError(ErrorCode.REPLAY_DETECTED, "replay or expired"))
 
         # --- Step 2: Rate limit ---
@@ -90,6 +90,9 @@ def create_verify_middleware(
         # Build headers dict for verification — include all lowercased headers
         if not verify_request(method, path, lower, pub_key):
             return VerifyResult(ok=False, error=SamvadError(ErrorCode.AUTH_FAILED, "signature verification failed"))
+
+        # --- Step 3.5: Commit nonce (only after full authentication) ---
+        await nonce_store.commit(sender, envelope.nonce, ts_unix)
 
         # --- Step 4: Injection scan (only after auth — never on untrusted input pre-auth) ---
         payload = envelope.payload

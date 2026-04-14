@@ -262,6 +262,25 @@ async def test_invalid_json_body_rejected(kp, sender):
 
 
 @pytest.mark.asyncio
+async def test_bad_signature_rejected(kp, sender, tmp_path):
+    """Known peer but wrong private key used to sign — should fail AUTH_FAILED."""
+    from samvad.keys import load_or_generate_keypair as gen_kp
+    wrong_kp = gen_kp(tmp_path / "wrong", "wrong")
+    reg = make_registry()
+    verify = create_verify_middleware(
+        registry=reg,
+        known_peers={sender: kp.public_key_b64},  # registered with kp's public key
+        nonce_store=InMemoryNonceStore(),
+        rate_limiter=RateLimiter(requests_per_minute=100, requests_per_sender=100),
+    )
+    # Sign with WRONG key
+    method, path, headers, body = make_signed_request(wrong_kp, sender)
+    result = await verify(method, path, headers, body)
+    assert not result.ok
+    assert result.error.code == ErrorCode.AUTH_FAILED.value
+
+
+@pytest.mark.asyncio
 async def test_trusted_peers_accepted_if_in_list(kp, sender):
     """A sender listed in allowedPeers should pass the trusted-peers trust tier."""
     reg = SkillRegistry()

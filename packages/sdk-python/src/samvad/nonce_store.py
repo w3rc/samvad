@@ -7,7 +7,19 @@ from abc import ABC, abstractmethod
 
 class NonceStore(ABC):
     @abstractmethod
-    async def check_and_add(self, sender: str, nonce: str, timestamp: int) -> bool: ...
+    async def check(self, sender: str, nonce: str, timestamp: int) -> bool:
+        """Non-mutating check: returns True if nonce is fresh and timestamp is valid."""
+        ...
+
+    @abstractmethod
+    async def commit(self, sender: str, nonce: str, timestamp: int) -> None:
+        """Mark nonce as seen. Call only after all pipeline gates pass."""
+        ...
+
+    @abstractmethod
+    async def check_and_add(self, sender: str, nonce: str, timestamp: int) -> bool:
+        """Convenience: check then commit atomically. Legacy method."""
+        ...
 
 
 class InMemoryNonceStore(NonceStore):
@@ -28,20 +40,24 @@ class InMemoryNonceStore(NonceStore):
         self.clock_skew = clock_skew_seconds
         self._seen: dict[tuple[str, str], int] = {}
 
-    async def check_and_add(self, sender: str, nonce: str, timestamp: int) -> bool:
+    async def check(self, sender: str, nonce: str, timestamp: int) -> bool:
         now = int(time.time())
-        # Past: reject if older than window
         if now - timestamp > self.window:
             return False
-        # Future: only allow up to clock_skew seconds ahead
         if timestamp - now > self.clock_skew:
             return False
-        self._sweep(now)
         key = (sender, nonce)
-        if key in self._seen:
-            return False
-        self._seen[key] = timestamp
-        return True
+        return key not in self._seen  # True = fresh, False = replay
+
+    async def commit(self, sender: str, nonce: str, timestamp: int) -> None:
+        self._sweep(int(time.time()))
+        self._seen[(sender, nonce)] = timestamp
+
+    async def check_and_add(self, sender: str, nonce: str, timestamp: int) -> bool:
+        ok = await self.check(sender, nonce, timestamp)
+        if ok:
+            await self.commit(sender, nonce, timestamp)
+        return ok
 
     def _sweep(self, now: int) -> None:
         cutoff = now - self.window
