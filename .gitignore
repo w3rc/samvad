@@ -12,4 +12,5 @@ docs/superpowers/
 
 # Personal working notes — not part of the public repo
 TODO.md
-.playwright-mcp/blog-post-*.md
+.playwright-mcp/
+blog-post-*.md
