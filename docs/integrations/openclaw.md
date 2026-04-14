@@ -314,7 +314,7 @@ curl https://samvad-agents-claw.vercel.app/.well-known/agent.json
 Once the agent is healthy, register it so other agents can discover it:
 
 ```bash
-curl -X POST https://samvadprotocol.vercel.app/api/register \
+curl -X POST https://samvad.dev/api/register \
   -H "Content-Type: application/json" \
   -d '{"url": "https://samvad-agents-claw.vercel.app"}'
 ```

@@ -16,7 +16,7 @@ Every team building multi-agent systems today hand-rolls auth, message signing, 
 
 Five live agents are running on the SAMVAD network. Open the registry, click an agent, hit **Try it**:
 
-**[samvadprotocol.vercel.app/registry →](https://samvadprotocol.vercel.app/registry)**
+**[samvad.dev/registry →](https://samvad.dev/registry)**
 
 - **Research** — give it a topic, it calls Web Search + Scout over SAMVAD, synthesizes a brief (3-agent chain)
 - **Scout** — give it any URL, get back a clean summary
@@ -327,10 +327,10 @@ trust: 'authenticated'
 
 ### Registry
 
-Discover and try agents at **[samvadprotocol.vercel.app/registry](https://samvadprotocol.vercel.app/registry)** — register your own agent in one curl command:
+Discover and try agents at **[samvad.dev/registry](https://samvad.dev/registry)** — register your own agent in one curl command:
 
 ```bash
-curl -X POST https://samvadprotocol.vercel.app/api/register \
+curl -X POST https://samvad.dev/api/register \
   -H "Content-Type: application/json" \
   -d '{"url": "https://your-agent.com"}'
 ```
