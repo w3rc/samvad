@@ -94,7 +94,8 @@ class AgentClient:
         return raw_body, {**base_headers, **sig}
 
     async def call(self, skill: str, payload: dict[str, Any]) -> dict[str, Any]:
-        assert self._card, "call connect() or from_url() first"
+        if self._card is None:
+            raise RuntimeError("call connect() or from_url() first")
         base_url = self._card.url.rstrip("/")
         env = self._build_envelope(skill, payload, mode="sync")
         raw_body, headers = self._sign_envelope(env, "POST", "/agent/message")
@@ -111,7 +112,8 @@ class AgentClient:
     async def task(
         self, skill: str, payload: dict[str, Any], *, callback_url: str | None = None
     ) -> str:
-        assert self._card, "call connect() or from_url() first"
+        if self._card is None:
+            raise RuntimeError("call connect() or from_url() first")
         base_url = self._card.url.rstrip("/")
         env = self._build_envelope(skill, payload, mode="async", callback_url=callback_url)
         raw_body, headers = self._sign_envelope(env, "POST", "/agent/task")
@@ -128,7 +130,8 @@ class AgentClient:
         interval: float = 0.5,
         timeout: float = 60.0,
     ) -> dict[str, Any]:
-        assert self._card, "call connect() or from_url() first"
+        if self._card is None:
+            raise RuntimeError("call connect() or from_url() first")
         task_id = await self.task(skill, payload)
         base_url = self._card.url.rstrip("/")
         deadline = time.monotonic() + timeout
@@ -145,7 +148,8 @@ class AgentClient:
     async def stream(
         self, skill: str, payload: dict[str, Any]
     ) -> AsyncIterator[dict[str, Any]]:
-        assert self._card, "call connect() or from_url() first"
+        if self._card is None:
+            raise RuntimeError("call connect() or from_url() first")
         base_url = self._card.url.rstrip("/")
         env = self._build_envelope(skill, payload, mode="stream")
         raw_body, headers = self._sign_envelope(env, "POST", "/agent/stream")

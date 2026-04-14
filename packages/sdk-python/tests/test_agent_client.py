@@ -204,7 +204,7 @@ class TestCall:
 
     async def test_call_requires_card(self, tmp_path: Path) -> None:
         client = make_prepared_client(tmp_path)
-        with pytest.raises(AssertionError):
+        with pytest.raises(RuntimeError):
             await client.call("add", {"a": 1, "b": 2})
 
 
@@ -262,7 +262,7 @@ class TestTask:
 
     async def test_task_requires_card(self, tmp_path: Path) -> None:
         client = make_prepared_client(tmp_path)
-        with pytest.raises(AssertionError):
+        with pytest.raises(RuntimeError):
             await client.task("add", {"a": 1, "b": 2})
 
 
@@ -336,5 +336,5 @@ class TestTaskAndPoll:
 
     async def test_task_and_poll_requires_card(self, tmp_path: Path) -> None:
         client = make_prepared_client(tmp_path)
-        with pytest.raises(AssertionError):
+        with pytest.raises(RuntimeError):
             await client.task_and_poll("add", {"a": 1, "b": 2})

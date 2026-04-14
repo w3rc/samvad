@@ -39,7 +39,14 @@ def test_python_verifies_ts_signed_vectors():
         )
 
 
-@pytest.mark.parametrize("case_name", ["simple-echo", "utf8-payload", "nested-sort"])
+def _load_case_names() -> list[str]:
+    if not VECTORS_PATH.exists():
+        return []
+    data = json.loads(VECTORS_PATH.read_text())
+    return [c["name"] for c in data.get("cases", [])]
+
+
+@pytest.mark.parametrize("case_name", _load_case_names())
 def test_each_vector_by_name(case_name: str):
     data = json.loads(VECTORS_PATH.read_text())
     pub = data["publicKeyB64"]
