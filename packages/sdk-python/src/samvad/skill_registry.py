@@ -67,7 +67,7 @@ class SkillRegistry:
         if skill is None:
             raise SamvadError(ErrorCode.SKILL_NOT_FOUND, f"skill '{name}' not found")
         try:
-            parsed = skill.input_model.model_validate(payload)
+            parsed = skill.input_model.model_validate(payload, strict=True)
         except ValidationError as e:
             raise SamvadError(ErrorCode.SCHEMA_INVALID, str(e)) from e
         result = await skill.handler(parsed, ctx)

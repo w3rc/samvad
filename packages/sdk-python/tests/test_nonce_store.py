@@ -33,6 +33,22 @@ async def test_future_timestamp_rejected():
 
 
 @pytest.mark.asyncio
+async def test_future_timestamp_within_skew_accepted():
+    s = InMemoryNonceStore(window_seconds=300, clock_skew_seconds=60)
+    now = int(time.time())
+    # 30 seconds in the future is within the 60s skew window — should be accepted
+    assert await s.check_and_add("alice", "n-skew", now + 30)
+
+
+@pytest.mark.asyncio
+async def test_future_timestamp_beyond_skew_rejected():
+    s = InMemoryNonceStore(window_seconds=300, clock_skew_seconds=60)
+    now = int(time.time())
+    # 61 seconds in the future exceeds the 60s clock skew — should be rejected
+    assert not await s.check_and_add("alice", "n-future", now + 61)
+
+
+@pytest.mark.asyncio
 async def test_different_senders_isolated():
     s = InMemoryNonceStore(window_seconds=300)
     now = int(time.time())

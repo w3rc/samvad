@@ -96,6 +96,32 @@ def test_to_skill_defs_includes_input_schema():
     assert "name" in defs[0].input_schema["properties"]
 
 
+@pytest.mark.asyncio
+async def test_schema_invalid_on_type_coercion():
+    """Pydantic strict=True must reject int for str field (no silent coercion)."""
+    reg = SkillRegistry()
+
+    class StrictIn(BaseModel):
+        text: str
+
+    class StrictOut(BaseModel):
+        result: str
+
+    async def h(p: StrictIn, c: SkillContext) -> StrictOut:
+        return StrictOut(result=p.text)
+
+    reg.register(name="strict-skill", description="", input_schema=StrictIn,
+                 output_schema=StrictOut, modes=["sync"], trust="public", handler=h)
+
+    with pytest.raises(SamvadError) as exc:
+        await reg.dispatch(
+            "strict-skill",
+            {"text": 123},  # int, not str — must be rejected
+            SkillContext(sender="x", trace_id="t", span_id="s"),
+        )
+    assert exc.value.code == "SCHEMA_INVALID"
+
+
 def test_get_registered_skill():
     registry = SkillRegistry()
     registry.register(
