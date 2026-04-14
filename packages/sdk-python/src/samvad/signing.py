@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import re
 import time
 from typing import Any
 
@@ -11,14 +12,11 @@ from .keys import sign_raw, verify_raw
 
 
 # Covered components in EXACTLY this order — changing order breaks cross-SDK compat
+# Must match the TS SDK: ("@method" "@path" "content-digest") only
 COVERED_COMPONENTS: tuple[str, ...] = (
     '"@method"',
     '"@path"',
     '"content-digest"',
-    '"content-type"',
-    '"samvad-agent"',
-    '"samvad-timestamp"',
-    '"samvad-nonce"',
 )
 
 
@@ -64,9 +62,12 @@ def _build_signature_base(
             val = lower[name]
         lines.append(f"{comp}: {val}")
 
-    params = f'({" ".join(COVERED_COMPONENTS)});created={created};keyid="{keyid}";alg="ed25519"'
+    # Param ordering must match TS: keyid first, then alg, then created
+    params = f'({" ".join(COVERED_COMPONENTS)});keyid="{keyid}";alg="ed25519";created={created}'
     lines.append(f'"@signature-params": {params}')
-    return "\n".join(lines), params
+    # Each line ends with \n (including the last) to match TS template-literal format
+    base_str = "\n".join(lines) + "\n"
+    return base_str, params
 
 
 def sign_request(
@@ -122,13 +123,19 @@ def verify_request(
     except (KeyError, ValueError):
         return False
 
-    base, _ = _build_signature_base(method, path, headers, int(created_str), keyid)
+    try:
+        base, _ = _build_signature_base(method, path, headers, int(created_str), keyid)
+    except (KeyError, ValueError):
+        return False
 
     try:
         sig_label, sig_value = s.split("=", 1)
         if sig_label != "sig1":
             return False
-        sig_b64 = sig_value.strip().strip(":")
+        m = re.match(r'^:([A-Za-z0-9+/]+=*):$', sig_value.strip())
+        if not m:
+            return False
+        sig_b64 = m.group(1)
         signature = base64.b64decode(sig_b64)
     except (ValueError, Exception):
         return False

@@ -68,7 +68,8 @@ def test_verify_rejects_tampered(tmp_path: Path):
     }
     sig = sign_request("POST", "/agent/message", headers, kp.private_key_b64, kp.kid, created=1)
     merged = {**headers, **sig}
-    merged["samvad-nonce"] = "DIFFERENT"
+    # Tamper with a covered component (content-digest is one of the 3 covered)
+    merged["content-digest"] = content_digest(b'{"tampered": true}')
     assert not verify_request("POST", "/agent/message", merged, kp.public_key_b64)
 
 
