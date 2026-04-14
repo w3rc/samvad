@@ -114,11 +114,15 @@ def create_verify_middleware(
             return VerifyResult(ok=False, error=SamvadError(ErrorCode.SKILL_NOT_FOUND, f"unknown skill: {skill_name}"))
 
         trust = skill.definition.trust
+        if trust == "authenticated":
+            # The SDK only checks that a token is present. Validating the token's content
+            # (expiry, claims, issuer) is the responsibility of the skill handler.
+            if not (envelope.auth and envelope.auth.token):
+                return VerifyResult(ok=False, error=SamvadError(ErrorCode.AUTH_FAILED, "Bearer token required"))
         if trust == "trusted-peers":
             allowed = skill.definition.allowed_peers or []
             if sender not in allowed:
                 return VerifyResult(ok=False, error=SamvadError(ErrorCode.AUTH_FAILED, "not in trusted-peers list"))
-        # 'public' and 'authenticated' require valid signature (already verified in step 3)
 
         return VerifyResult(ok=True, envelope=envelope, skill=skill)
 
