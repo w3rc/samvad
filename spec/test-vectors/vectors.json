@@ -1,0 +1,41 @@
+{
+  "description": "RFC 9421 test vectors signed by the TypeScript SAMVAD SDK",
+  "protocolVersion": "1.2",
+  "publicKeyB64": "lwh+eIfedTDvdZUYsT0q4XpCOdM1GF87mfLglCmGbcM=",
+  "kid": "vector-kid",
+  "cases": [
+    {
+      "name": "simple-echo",
+      "method": "POST",
+      "path": "/agent/message",
+      "bodyJson": "{\"skill\":\"echo\",\"payload\":{\"text\":\"hello\"}}",
+      "expectedResult": {
+        "content-digest": "sha-256=:RLHosW+Xja6u0qQuO+gG+51ozHoDr5rw4i8ljO4XMWY=:",
+        "signature-input": "sig1=(\"@method\" \"@path\" \"content-digest\");keyid=\"vector-kid\";alg=\"ed25519\";created=1776146908",
+        "signature": "sig1=:7M0uvc4ka0V/3Tiq+eeUS44SIWGF0uYriXNGief9yj8n4mPaKyweiwdzg2SCJj7ZLPsUvwkmmEd/KDB6i1ZpBw==:"
+      }
+    },
+    {
+      "name": "utf8-payload",
+      "method": "POST",
+      "path": "/agent/message",
+      "bodyJson": "{\"skill\":\"translate\",\"payload\":{\"text\":\"भारत\",\"lang\":\"en\"}}",
+      "expectedResult": {
+        "content-digest": "sha-256=:MoGrUSvWqIUbE49edO0sv0YoE6g61I0xys0pctUHREo=:",
+        "signature-input": "sig1=(\"@method\" \"@path\" \"content-digest\");keyid=\"vector-kid\";alg=\"ed25519\";created=1776146908",
+        "signature": "sig1=:okaj/VI3sD8+PJtazLd4ej42GEjoKM1R4fHjX31FkJFCDj2r4e9I5kFQsC51zX8M3oAED56wC8ByIIHpFsNPCg==:"
+      }
+    },
+    {
+      "name": "nested-sort",
+      "method": "POST",
+      "path": "/agent/task",
+      "bodyJson": "{\"z\":{\"b\":2,\"a\":1},\"a\":\"first\"}",
+      "expectedResult": {
+        "content-digest": "sha-256=:Doe8TuiXuimOpgsSP7eSjxk8OyFiHZRSay7X3wareRI=:",
+        "signature-input": "sig1=(\"@method\" \"@path\" \"content-digest\");keyid=\"vector-kid\";alg=\"ed25519\";created=1776146908",
+        "signature": "sig1=:jFCuwZ3iU97O2eRaKbWnVLAW2qt5z1np26f2C8B7r9U5FdAEHy5XmYKUqCpJcUzrKi+V3x4ij4O86J3acx3xCQ==:"
+      }
+    }
+  ]
+}

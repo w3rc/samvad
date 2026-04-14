@@ -4,6 +4,7 @@ dist/
 
 # Never commit cryptographic private keys
 .samvad/
+spec/test-vectors/keys/
 
 # Superpowers workflow artifacts (brainstorm state, specs, plans)
 .superpowers/
