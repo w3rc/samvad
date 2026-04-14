@@ -13,6 +13,7 @@ from samvad.signing import sign_request, content_digest, canonical_json
 from samvad.skill_registry import SkillRegistry
 from samvad.types import SkillContext, RateLimit
 from samvad.verify_middleware import create_verify_middleware, VerifyResult
+from samvad.delegation import issue_token
 from pydantic import BaseModel
 
 
@@ -49,6 +50,7 @@ def make_signed_request(
     nonce: str | None = None,
     timestamp: str | None = None,
     payload: dict | None = None,
+    delegation_token: str | None = None,
 ):
     """Helper: build a signed request tuple (method, path, headers, raw_body)."""
     if nonce is None:
@@ -59,7 +61,7 @@ def make_signed_request(
     if payload is None:
         payload = {"text": "hello"}
 
-    envelope = {
+    envelope: dict = {
         "from": sender,
         "to": "agent://server.example",
         "skill": skill,
@@ -70,6 +72,8 @@ def make_signed_request(
         "spanId": "s1",
         "payload": payload,
     }
+    if delegation_token is not None:
+        envelope["delegationToken"] = delegation_token
     raw_body = canonical_json(envelope).encode("utf-8")
     digest = content_digest(raw_body)
     method = "POST"
@@ -307,3 +311,104 @@ async def test_trusted_peers_accepted_if_in_list(kp, sender):
     method, path, headers, body = make_signed_request(kp, sender, skill="trusted-echo")
     result = await verify(method, path, headers, body)
     assert result.ok
+
+
+@pytest.mark.asyncio
+async def test_valid_delegation_token_passes(kp, sender, tmp_path):
+    """A valid delegation token issued by a known peer with correct sub and scope passes."""
+    # issuer keypair — the party granting delegation authority
+    issuer_kp = load_or_generate_keypair(tmp_path / "issuer", "issuer")
+    issuer_id = "agent://issuer.example"
+
+    token = issue_token(
+        iss=issuer_id,
+        sub=sender,
+        scope=["echo"],
+        max_depth=1,
+        private_key_b64=issuer_kp.private_key_b64,
+        kid=issuer_kp.kid,
+    )
+
+    reg = make_registry()
+    verify = create_verify_middleware(
+        registry=reg,
+        known_peers={
+            sender: kp.public_key_b64,
+            issuer_id: issuer_kp.public_key_b64,
+        },
+        nonce_store=InMemoryNonceStore(),
+        rate_limiter=RateLimiter(requests_per_minute=100, requests_per_sender=100),
+    )
+    method, path, headers, body = make_signed_request(
+        kp, sender, delegation_token=token
+    )
+    result = await verify(method, path, headers, body)
+    assert result.ok, f"Expected ok, got error: {result.error}"
+
+
+@pytest.mark.asyncio
+async def test_forged_delegation_token_rejected(kp, sender, tmp_path):
+    """A delegation token whose sub does not match the actual sender is rejected."""
+    issuer_kp = load_or_generate_keypair(tmp_path / "issuer", "issuer")
+    issuer_id = "agent://issuer.example"
+
+    # sub is a different agent, not the actual sender
+    token = issue_token(
+        iss=issuer_id,
+        sub="agent://evil.example",  # wrong sub
+        scope=["echo"],
+        max_depth=1,
+        private_key_b64=issuer_kp.private_key_b64,
+        kid=issuer_kp.kid,
+    )
+
+    reg = make_registry()
+    verify = create_verify_middleware(
+        registry=reg,
+        known_peers={
+            sender: kp.public_key_b64,
+            issuer_id: issuer_kp.public_key_b64,
+        },
+        nonce_store=InMemoryNonceStore(),
+        rate_limiter=RateLimiter(requests_per_minute=100, requests_per_sender=100),
+    )
+    method, path, headers, body = make_signed_request(
+        kp, sender, delegation_token=token
+    )
+    result = await verify(method, path, headers, body)
+    assert not result.ok
+    assert result.error.code == ErrorCode.AUTH_FAILED.value
+
+
+@pytest.mark.asyncio
+async def test_delegation_scope_mismatch_rejected(kp, sender, tmp_path):
+    """A delegation token whose scope does not include the requested skill is rejected."""
+    issuer_kp = load_or_generate_keypair(tmp_path / "issuer", "issuer")
+    issuer_id = "agent://issuer.example"
+
+    # scope does not include "echo"
+    token = issue_token(
+        iss=issuer_id,
+        sub=sender,
+        scope=["other-skill"],  # wrong scope
+        max_depth=1,
+        private_key_b64=issuer_kp.private_key_b64,
+        kid=issuer_kp.kid,
+    )
+
+    reg = make_registry()
+    verify = create_verify_middleware(
+        registry=reg,
+        known_peers={
+            sender: kp.public_key_b64,
+            issuer_id: issuer_kp.public_key_b64,
+        },
+        nonce_store=InMemoryNonceStore(),
+        rate_limiter=RateLimiter(requests_per_minute=100, requests_per_sender=100),
+    )
+    method, path, headers, body = make_signed_request(
+        kp, sender, delegation_token=token
+    )
+    result = await verify(method, path, headers, body)
+    assert not result.ok
+    assert result.error.code == ErrorCode.AUTH_FAILED.value

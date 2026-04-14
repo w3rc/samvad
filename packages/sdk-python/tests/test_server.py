@@ -270,10 +270,10 @@ class TestStaticEndpoints:
         ) as client:
             resp = await client.get("/agent/intro")
         assert resp.status_code == 200
-        body = resp.json()
-        assert body["protocol"] == "samvad"
-        assert body["version"] == "1.2"
-        assert "capabilities" in body
+        assert "text/markdown" in resp.headers["content-type"]
+        body = resp.text
+        assert "SAMVAD" in body
+        assert "## Skills" in body
 
 
 # ---------------------------------------------------------------------------

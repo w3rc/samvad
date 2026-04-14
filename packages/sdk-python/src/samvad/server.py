@@ -5,6 +5,7 @@ import asyncio
 import ipaddress
 import json
 import logging
+import time as _time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
@@ -132,6 +133,8 @@ async def _run_task(
 
 
 def build_app(config: ServerConfig) -> Starlette:
+    _start_time = _time.time()
+
     verify = create_verify_middleware(
         registry=config.registry,
         known_peers=config.known_peers,
@@ -147,15 +150,28 @@ def build_app(config: ServerConfig) -> Starlette:
         )
 
     async def health(request: Request) -> Response:
-        return JSONResponse({"status": "ok"})
+        return JSONResponse({
+            "status": "ok",
+            "protocolVersion": "1.2",
+            "agentVersion": config.card.version,
+            "uptime": _time.time() - _start_time,
+        })
 
     async def intro(request: Request) -> Response:
-        return JSONResponse({
-            "protocol": "samvad",
-            "version": "1.2",
-            "agent": config.card.id,
-            "capabilities": ["sync", "async", "stream"],
-        })
+        card = config.card
+        skill_lines = "\n".join(
+            f"- **{s.name}** (`{s.id}`) — {s.description or ''} [{', '.join(s.modes)}]"
+            for s in (card.skills or [])
+        )
+        md = (
+            f"# {card.name}\n\n"
+            f"{card.description or ''}\n\n"
+            f"**Protocol:** SAMVAD v{card.protocol_version}  \n"
+            f"**Agent ID:** `{card.id}`  \n"
+            f"**URL:** {card.url}\n\n"
+            f"## Skills\n\n{skill_lines or '_No skills registered._'}\n"
+        )
+        return Response(md, media_type="text/markdown; charset=utf-8")
 
     async def agent_message(request: Request) -> Response:
         raw_body = await request.body()
@@ -292,6 +308,13 @@ def build_app(config: ServerConfig) -> Starlette:
         raw_body = await request.body()
         headers = dict(request.headers)
         span_id = str(uuid.uuid4())
+
+        if not _verify_body_digest(headers, raw_body):
+            return JSONResponse(
+                {"traceId": "", "spanId": span_id, "status": "error",
+                 "error": {"code": ErrorCode.AUTH_FAILED.value, "message": "Content-Digest mismatch"}},
+                status_code=401,
+            )
 
         result = await verify("POST", "/agent/stream", headers, raw_body)
         if not result.ok:
