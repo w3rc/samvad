@@ -5,6 +5,7 @@
 Every team building multi-agent systems today hand-rolls auth, message signing, replay protection, and rate limiting. SAMVAD makes the secure path the fast path — a working, signed, rate-limited agent in 15 lines of TypeScript.
 
 [![npm](https://img.shields.io/npm/v/@samvad-protocol/sdk)](https://www.npmjs.com/package/@samvad-protocol/sdk)
+[![PyPI](https://img.shields.io/pypi/v/samvad)](https://pypi.org/project/samvad/)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue)](./LICENSE)
 [![Spec](https://img.shields.io/badge/spec-v1.2-green)](./spec/protocol-v1.2.md)
 [![Docs](https://img.shields.io/badge/docs-mintlify-brightgreen)](https://abcd-f0394a8a.mintlify.app)
@@ -346,30 +347,39 @@ curl -X POST https://samvadprotocol.vercel.app/api/register \
 ```
 samvad/
 ├── packages/
-│   └── sdk-typescript/          # @samvad-protocol/sdk
-│       ├── src/
-│       │   ├── agent.ts             # Agent class (server builder)
-│       │   ├── agent-client.ts      # AgentClient (calling other agents)
-│       │   ├── server.ts            # Fastify server + verify pipeline
-│       │   ├── signing.ts           # Ed25519 + RFC 9421 HTTP Message Signatures
-│       │   ├── delegation.ts        # JWT delegation tokens (jose)
-│       │   ├── skill-registry.ts    # Skill registration + dispatch
-│       │   ├── task-store.ts        # Async task state
-│       │   ├── rate-limiter.ts      # Per-sender sliding window + token budget
-│       │   ├── nonce-store.ts       # Replay protection
-│       │   ├── injection-scanner.ts # Prompt-injection regex first pass
-│       │   ├── card.ts              # AgentCard builder
-│       │   ├── keys.ts              # Keypair generation and I/O
-│       │   ├── stream.ts            # SSE helpers
-│       │   ├── errors.ts            # SamvadError + error codes
-│       │   └── types.ts             # Envelope, card, and skill types
+│   ├── sdk-typescript/          # @samvad-protocol/sdk (npm)
+│   │   ├── src/
+│   │   │   ├── agent.ts             # Agent class (server builder)
+│   │   │   ├── agent-client.ts      # AgentClient (calling other agents)
+│   │   │   ├── server.ts            # Fastify server + verify pipeline
+│   │   │   ├── signing.ts           # Ed25519 + RFC 9421 HTTP Message Signatures
+│   │   │   ├── delegation.ts        # JWT delegation tokens (jose)
+│   │   │   ├── skill-registry.ts    # Skill registration + dispatch
+│   │   │   ├── task-store.ts        # Async task state
+│   │   │   ├── rate-limiter.ts      # Per-sender sliding window + token budget
+│   │   │   ├── nonce-store.ts       # Replay protection
+│   │   │   ├── injection-scanner.ts # Prompt-injection regex first pass
+│   │   │   ├── card.ts              # AgentCard builder
+│   │   │   ├── keys.ts              # Keypair generation and I/O
+│   │   │   ├── stream.ts            # SSE helpers
+│   │   │   ├── errors.ts            # SamvadError + error codes
+│   │   │   └── types.ts             # Envelope, card, and skill types
+│   │   └── tests/
+│   └── sdk-python/              # samvad (PyPI) — protocol v1.2 parity
+│       ├── src/samvad/          # mirrors sdk-typescript/src/ module-for-module
 │       └── tests/
-└── examples/
-    ├── basic-agent-ts/          # Hello-world agent
-    └── debate-demo/             # Two-agent debate over signed envelopes
+├── examples/
+│   ├── basic-agent-ts/          # Hello-world TypeScript agent
+│   ├── basic-agent-py/          # Hello-world Python agent (Starlette)
+│   └── debate-demo/             # Two-agent debate over signed envelopes
+└── spec/
+    ├── protocol-v1.2.md
+    └── test-vectors/            # Cross-SDK signing vectors (TS-signed, Python-verified)
 ```
 
 ## Development
+
+### TypeScript SDK
 
 ```bash
 npm install
@@ -379,7 +389,18 @@ npm run build --workspaces        # build all
 npm start -w basic-agent-ts       # run the example agent
 ```
 
-The SDK is ESM-only (`"type": "module"`, `module: NodeNext`). Internal imports use `.js` extensions. Vitest runs tests directly against `src/` — no build step required before `npm test`.
+The TypeScript SDK is ESM-only (`"type": "module"`, `module: NodeNext`). Internal imports use `.js` extensions. Vitest runs tests directly against `src/` — no build step required before `npm test`.
+
+### Python SDK
+
+```bash
+cd packages/sdk-python
+pip install -e ".[dev]"
+pytest                            # 147 tests
+ruff check src tests              # lint
+```
+
+Python 3.10+. Wire-compatible with the TypeScript SDK — the same RFC 9421 signatures work across both. Cross-SDK test vectors in `spec/test-vectors/vectors.json` lock the wire format.
 
 See [CLAUDE.md](./CLAUDE.md) for architecture details and the request-verification pipeline.  
 Full protocol spec: [`spec/protocol-v1.2.md`](./spec/protocol-v1.2.md).
