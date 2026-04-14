@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime
+import inspect
 import json
 import logging
 from dataclasses import dataclass, field
@@ -80,6 +81,7 @@ def create_verify_middleware(
 
         # --- Step 2: Rate limit ---
         if not rate_limiter.check_request(sender):
+            await nonce_store.rollback(sender, envelope.nonce)
             return VerifyResult(ok=False, error=SamvadError(ErrorCode.RATE_LIMITED, "rate limited"))
 
         # --- Step 3: Signature verify ---
@@ -93,6 +95,33 @@ def create_verify_middleware(
 
         # --- Step 3.5: Commit nonce (only after full authentication) ---
         await nonce_store.commit(sender, envelope.nonce, ts_unix)
+
+        # --- Step 3.7: Delegation token verification (if present) ---
+        if envelope.delegation_token is not None:
+            import jwt as _jwt
+            try:
+                unverified = _jwt.decode(
+                    envelope.delegation_token,
+                    options={"verify_signature": False},
+                )
+                issuer = unverified.get("iss")
+            except Exception:
+                return VerifyResult(ok=False, error=SamvadError(ErrorCode.AUTH_FAILED, "invalid delegation token format"))
+
+            issuer_pub_key = known_peers.get(issuer or "")
+            if issuer_pub_key is None:
+                return VerifyResult(ok=False, error=SamvadError(ErrorCode.AUTH_FAILED, f"delegation issuer unknown: {issuer}"))
+
+            from .delegation import verify_token as _verify_token
+            try:
+                claims = _verify_token(envelope.delegation_token, issuer_public_key_b64=issuer_pub_key)
+            except SamvadError as e:
+                return VerifyResult(ok=False, error=e)
+
+            if claims.get("sub") != sender:
+                return VerifyResult(ok=False, error=SamvadError(ErrorCode.AUTH_FAILED, "delegation token sub does not match sender"))
+            if skill_name not in claims.get("scope", []):
+                return VerifyResult(ok=False, error=SamvadError(ErrorCode.AUTH_FAILED, f"skill '{skill_name}' not in delegation scope"))
 
         # --- Step 4: Injection scan (only after auth — never on untrusted input pre-auth) ---
         payload = envelope.payload
@@ -130,6 +159,6 @@ def create_verify_middleware(
 
 
 async def _await_if_needed(result: Any) -> bool:
-    if hasattr(result, "__await__"):
+    if inspect.isawaitable(result):
         return await result
     return bool(result)

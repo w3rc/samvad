@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
+import threading
 import time
 from dataclasses import dataclass, field
 
@@ -37,6 +38,7 @@ class RateLimiter:
         self._tokens_per_sender_per_day = tokens_per_sender_per_day
         self._senders: dict[str, _SenderState] = {}
         self._global_timestamps: list[float] = []
+        self._lock = threading.Lock()
 
     def _get_or_create(self, sender: str) -> _SenderState:
         if sender not in self._senders:
@@ -53,15 +55,16 @@ class RateLimiter:
 
     def charge_tokens(self, sender: str, tokens: int) -> bool:
         """Deduct tokens from the sender's daily budget. Returns True if allowed."""
-        state = self._get_or_create(sender)
-        self._reset_day_if_needed(state)
-        if (
-            self._tokens_per_sender_per_day is not None
-            and state.daily_tokens + tokens > self._tokens_per_sender_per_day
-        ):
-            return False
-        state.daily_tokens += tokens
-        return True
+        with self._lock:
+            state = self._get_or_create(sender)
+            self._reset_day_if_needed(state)
+            if (
+                self._tokens_per_sender_per_day is not None
+                and state.daily_tokens + tokens > self._tokens_per_sender_per_day
+            ):
+                return False
+            state.daily_tokens += tokens
+            return True
 
     def check(self, sender: str) -> None:
         """Check rate limits, raising SamvadError on violation."""
@@ -69,9 +72,10 @@ class RateLimiter:
 
     def record_tokens(self, sender: str, tokens: int) -> None:
         """Record token usage for a sender (mirrors TS recordTokens)."""
-        state = self._get_or_create(sender)
-        self._reset_day_if_needed(state)
-        state.daily_tokens += tokens
+        with self._lock:
+            state = self._get_or_create(sender)
+            self._reset_day_if_needed(state)
+            state.daily_tokens += tokens
 
     def _reset_day_if_needed(self, state: _SenderState) -> None:
         today_start = _utc_midnight()
@@ -80,6 +84,10 @@ class RateLimiter:
             state.day_start = today_start
 
     def _check(self, sender: str) -> None:
+        with self._lock:
+            self._check_locked(sender)
+
+    def _check_locked(self, sender: str) -> None:
         state = self._get_or_create(sender)
         now = time.time()
 
