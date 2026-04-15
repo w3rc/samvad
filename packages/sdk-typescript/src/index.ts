@@ -15,8 +15,8 @@ export type { Keypair } from './keys.js'
 export { computeContentDigest, parseKeyId, signRequest, verifyRequest } from './signing.js'
 export type { RequestSignatureHeaders } from './signing.js'
 
-export { NonceStore } from './nonce-store.js'
-export type { NonceCheckResult } from './nonce-store.js'
+export { NonceStore, InMemoryNonceStore, UpstashRedisNonceStore } from './nonce-store.js'
+export type { NonceCheckResult, NonceStoreAdapter, UpstashRedisClient } from './nonce-store.js'
 
 export { scanObjectForInjection, wrapWithContentBoundary } from './injection-scanner.js'
 

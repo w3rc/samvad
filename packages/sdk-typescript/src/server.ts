@@ -7,7 +7,7 @@ import type { AgentCard, MessageEnvelope, ResponseEnvelope, InjectionClassifier 
 import type { SkillRegistry } from './skill-registry.js'
 import type { TaskStore } from './task-store.js'
 import type { RateLimiter } from './rate-limiter.js'
-import type { NonceStore } from './nonce-store.js'
+import type { NonceStoreAdapter } from './nonce-store.js'
 import type { Keypair } from './keys.js'
 import { verifyRequest } from './signing.js'
 import { verifyDelegationToken } from './delegation.js'
@@ -28,7 +28,7 @@ export interface ServerOptions {
   keypair: Keypair
   taskStore: TaskStore
   rateLimiter: RateLimiter
-  nonceStore: NonceStore
+  nonceStore: NonceStoreAdapter
   introText: string
   knownPeers: Map<string, Uint8Array>  // agentId -> publicKey cache
   injectionClassifier?: InjectionClassifier
@@ -102,7 +102,7 @@ export function buildServer(opts: ServerOptions): FastifyInstance {
   // ── Shared: verify incoming envelope (RFC 9421 signature path) ──────────
   async function verifyIncoming(req: FastifyRequest, envelope: MessageEnvelope): Promise<void> {
     // 1. Nonce + timestamp check (cheap, fast rejection)
-    const nonceResult = opts.nonceStore.check(envelope.nonce, envelope.timestamp)
+    const nonceResult = await opts.nonceStore.check(envelope.nonce, envelope.timestamp)
     if (nonceResult === 'expired') throw new SamvadError(ErrorCode.AUTH_FAILED, 'Message timestamp expired')
     if (nonceResult === 'replay') throw new SamvadError(ErrorCode.REPLAY_DETECTED, 'Nonce already seen')
 

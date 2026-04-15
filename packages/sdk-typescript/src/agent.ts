@@ -6,7 +6,8 @@ import { generateKeypair, saveKeypair, loadKeypair, encodePublicKey } from './ke
 import { SkillRegistry } from './skill-registry.js'
 import { TaskStore } from './task-store.js'
 import { RateLimiter } from './rate-limiter.js'
-import { NonceStore } from './nonce-store.js'
+import { InMemoryNonceStore } from './nonce-store.js'
+import type { NonceStoreAdapter } from './nonce-store.js'
 import { buildAgentCard } from './card.js'
 import { buildServer } from './server.js'
 import type { CommunicationMode, TrustTier, InjectionClassifier } from './types.js'
@@ -23,6 +24,8 @@ export interface AgentConfig {
   cardTTL?: number
   rateLimit?: { requestsPerMinute: number; requestsPerSender: number; tokensPerSenderPerDay?: number }
   injectionClassifier?: InjectionClassifier
+  /** Custom nonce store. Use UpstashRedisNonceStore for serverless or multi-replica deployments. */
+  nonceStore?: NonceStoreAdapter
 }
 
 export interface AgentSkillOptions {
@@ -100,7 +103,7 @@ export class Agent {
       keypair: kp,
       taskStore: new TaskStore(3600_000),
       rateLimiter: new RateLimiter(card.rateLimit),
-      nonceStore: new NonceStore(5 * 60_000),
+      nonceStore: this.config.nonceStore ?? new InMemoryNonceStore(5 * 60_000),
       introText,
       knownPeers,
       injectionClassifier: this.config.injectionClassifier,

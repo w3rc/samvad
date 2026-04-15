@@ -9,7 +9,8 @@
  * response type (NextResponse, express res.json, etc.).
  */
 
-import { NonceStore } from './nonce-store.js'
+import { InMemoryNonceStore } from './nonce-store.js'
+import type { NonceStoreAdapter } from './nonce-store.js'
 import { verifyRequest } from './signing.js'
 import type { RequestSignatureHeaders } from './signing.js'
 import { decodePublicKey } from './keys.js'
@@ -25,8 +26,10 @@ export interface VerifyMiddlewareConfig {
   skills: SkillDef[]
   /** Rate limiter function — return { allowed: false } to reject */
   rateLimiter?: (clientIp: string) => { allowed: boolean; limit?: number }
-  /** Nonce window in ms (default: 5 minutes) */
+  /** Nonce window in ms (default: 5 minutes). Ignored when nonceStore is provided. */
   nonceWindowMs?: number
+  /** Custom nonce store. Use UpstashRedisNonceStore for serverless or multi-replica deployments. */
+  nonceStore?: NonceStoreAdapter
   /** Peer key cache TTL in ms (default: 5 minutes) */
   peerCacheTtlMs?: number
   /** Fetch timeout for remote agent cards in ms (default: 8000) */
@@ -52,7 +55,7 @@ export type VerifyResult =
 // ── Middleware factory ───────────────────────────────────────────────────────
 
 export function createVerifyMiddleware(config: VerifyMiddlewareConfig) {
-  const nonceStore = new NonceStore(config.nonceWindowMs ?? 5 * 60 * 1000)
+  const nonceStore: NonceStoreAdapter = config.nonceStore ?? new InMemoryNonceStore(config.nonceWindowMs ?? 5 * 60 * 1000)
   const peerKeyCache = new Map<string, { keys: PublicKey[]; fetchedAt: number }>()
   const peerCacheTtl = config.peerCacheTtlMs ?? 5 * 60 * 1000
   const fetchTimeout = config.fetchTimeoutMs ?? 8000
@@ -162,7 +165,7 @@ export function createVerifyMiddleware(config: VerifyMiddlewareConfig) {
     }
 
     // 1. Nonce + timestamp
-    const nonceResult = nonceStore.check(envelope.nonce, envelope.timestamp)
+    const nonceResult = await nonceStore.check(envelope.nonce, envelope.timestamp)
     if (nonceResult === 'expired') {
       return err(400, 'TIMESTAMP_EXPIRED', 'Request timestamp is outside the 5-minute window', envelope.traceId)
     }
