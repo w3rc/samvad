@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from .card import build_agent_card
 from .keys import Keypair, load_or_generate_keypair
-from .nonce_store import InMemoryNonceStore
+from .nonce_store import InMemoryNonceStore, NonceStore
 from .rate_limiter import RateLimiter
 from .server import ServerConfig, build_app
 from .skill_registry import SkillRegistry
@@ -38,6 +38,7 @@ class Agent:
         rate_limit: RateLimit | None = None,
         injection_classifier: InjectionClassifier | None = None,
         card_ttl: int = 300,
+        nonce_store: NonceStore | None = None,
     ) -> None:
         self._name = name
         self._description = description
@@ -49,6 +50,7 @@ class Agent:
         self._rate_limit = rate_limit or RateLimit(requestsPerMinute=60, requestsPerSender=20)
         self._injection_classifier = injection_classifier
         self._card_ttl = card_ttl
+        self._nonce_store = nonce_store
         self._registry = SkillRegistry()
         self._known_peers: dict[str, str] = {}  # agent:// URI → public key b64
         self._keypair: Keypair | None = None
@@ -110,7 +112,7 @@ class Agent:
             card=card,
             registry=self._registry,
             known_peers=self._known_peers,
-            nonce_store=InMemoryNonceStore(),
+            nonce_store=self._nonce_store or InMemoryNonceStore(),
             rate_limiter=RateLimiter(
                 requests_per_minute=self._rate_limit.requests_per_minute,
                 requests_per_sender=self._rate_limit.requests_per_sender,
