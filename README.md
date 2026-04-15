@@ -12,6 +12,22 @@ Every team building multi-agent systems today hand-rolls auth, message signing, 
 
 ---
 
+## How SAMVAD is different
+
+SAMVAD is a wire protocol — not an orchestration framework, not an LLM wrapper, not a competitor to LangChain or CrewAI. It is the transport layer those tools sit on top of.
+
+| | SAMVAD | MCP (Anthropic) | A2A (Google) |
+|---|---|---|---|
+| **Model** | Agent-to-agent, peer-to-peer | Client-server (LLM → tool) | Agent-to-agent |
+| **Identity** | Your domain (DNS + TLS) | None | Central registry |
+| **Auth** | Ed25519 + signed envelopes | None on the wire | Enterprise IAM |
+| **Discovery** | `/.well-known/agent.json` | No standard | Central registry |
+| **Setup** | 15 lines | N/A | Enterprise infrastructure |
+
+MCP was designed for connecting LLMs to tools — not for agents calling other agents. Google's A2A assumes central infrastructure and enterprise identity. SAMVAD is peer-to-peer: your domain is your identity, and any agent that can host a JSON file can be on the network.
+
+---
+
 ## Try it now — no code required
 
 Five live agents are running on the SAMVAD network. Open the registry, click an agent, hit **Try it**:
@@ -69,23 +85,6 @@ const result = await client.call('greet', { name: 'Ada' })
 
 ---
 
-## What you get for free on every agent
-
-| Layer | What the SDK does |
-|---|---|
-| **Identity** | Ed25519 keypair generated on first run, published in agent card |
-| **Signatures** | RFC 9421 HTTP Message Signatures on every envelope — Ed25519 + SHA-256 body digest |
-| **Replay protection** | 5-minute nonce window, UUID nonce + timestamp on every message |
-| **Rate limiting** | Per-sender sliding-window request limits + daily token budget, declared in the card |
-| **Input validation** | Zod schemas converted to JSON Schema; unknown fields dropped; validated before handler runs |
-| **Injection scanning** | Regex first-pass scanner — runs only *after* signature verification (never scans untrusted input before auth) |
-| **Delegation** | EdDSA JWT tokens with scope + depth enforcement; depth decremented each hop, `DELEGATION_EXCEEDED` at zero |
-| **Observability** | OpenTelemetry-compatible `traceId`/`spanId`/`parentSpanId` on every envelope |
-
-None of these require any code from you. Registering a skill and calling `agent.serve()` is all it takes.
-
----
-
 ## See it live
 
 *Two agents debating — each claim sent as a signed SAMVAD envelope, challenged in real time by a Red Team agent on a separate port.*
@@ -101,19 +100,20 @@ npm run demo:live "AI will replace software engineers"
 
 ---
 
-## How SAMVAD is different
+## What you get for free on every agent
 
-SAMVAD is a wire protocol — not an orchestration framework, not an LLM wrapper, not a competitor to LangChain or CrewAI. It is the transport layer those tools sit on top of.
+| Layer | What the SDK does |
+|---|---|
+| **Identity** | Ed25519 keypair generated on first run, published in agent card |
+| **Signatures** | RFC 9421 HTTP Message Signatures on every envelope — Ed25519 + SHA-256 body digest |
+| **Replay protection** | 5-minute nonce window, UUID nonce + timestamp on every message |
+| **Rate limiting** | Per-sender sliding-window request limits + daily token budget, declared in the card |
+| **Input validation** | Zod schemas converted to JSON Schema; unknown fields dropped; validated before handler runs |
+| **Injection scanning** | Regex first-pass scanner — runs only *after* signature verification (never scans untrusted input before auth) |
+| **Delegation** | EdDSA JWT tokens with scope + depth enforcement; depth decremented each hop, `DELEGATION_EXCEEDED` at zero |
+| **Observability** | OpenTelemetry-compatible `traceId`/`spanId`/`parentSpanId` on every envelope |
 
-| | SAMVAD | MCP (Anthropic) | A2A (Google) |
-|---|---|---|---|
-| **Model** | Agent-to-agent, peer-to-peer | Client-server (LLM → tool) | Agent-to-agent |
-| **Identity** | Your domain (DNS + TLS) | None | Central registry |
-| **Auth** | Ed25519 + signed envelopes | None on the wire | Enterprise IAM |
-| **Discovery** | `/.well-known/agent.json` | No standard | Central registry |
-| **Setup** | 15 lines | N/A | Enterprise infrastructure |
-
-MCP was designed for connecting LLMs to tools — not for agents calling other agents. Google's A2A assumes central infrastructure and enterprise identity. SAMVAD is peer-to-peer: your domain is your identity, and any agent that can host a JSON file can be on the network.
+None of these require any code from you. Registering a skill and calling `agent.serve()` is all it takes.
 
 ---
 
