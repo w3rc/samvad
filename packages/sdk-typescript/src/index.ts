@@ -6,6 +6,9 @@ export type { AgentConfig, AgentSkillOptions, ServeOptions } from './agent.js'
 export { AgentClient } from './agent-client.js'
 export type { AgentClientOptions } from './agent-client.js'
 
+export { BrowserAgentClient } from './browser-client.js'
+export type { BrowserAgentClientOptions } from './browser-client.js'
+
 export { SamvadError, ErrorCode } from './errors.js'
 export type { ErrorCodeType } from './errors.js'
 

@@ -1,7 +1,20 @@
 // SPDX-License-Identifier: Apache-2.0
 import * as ed from '@noble/ed25519'
-import { createHash } from 'node:crypto'
 import type { Keypair } from './keys.js'
+
+// Browser-safe base64 helpers (loop-based — spread-based causes stack overflow on large arrays)
+function uint8ToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+  return btoa(binary)
+}
+
+function base64ToUint8(b64: string): Uint8Array {
+  const binary = atob(b64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes
+}
 
 /**
  * RFC 9421 HTTP Message Signatures — minimal implementation for SAMVAD.
@@ -17,9 +30,9 @@ import type { Keypair } from './keys.js'
  */
 
 // Compute Content-Digest header value per RFC 9530
-export function computeContentDigest(bodyBytes: Uint8Array): string {
-  const hash = createHash('sha256').update(bodyBytes).digest('base64')
-  return `sha-256=:${hash}:`
+export async function computeContentDigest(bodyBytes: Uint8Array): Promise<string> {
+  const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', bodyBytes)
+  return `sha-256=:${uint8ToBase64(new Uint8Array(hashBuffer))}:`
 }
 
 // Parse the keyid from a Signature-Input header value
@@ -65,7 +78,7 @@ export async function signRequest(
   bodyBytes: Uint8Array,
   kp: Keypair,
 ): Promise<RequestSignatureHeaders> {
-  const contentDigest = computeContentDigest(bodyBytes)
+  const contentDigest = await computeContentDigest(bodyBytes)
   const created = Math.floor(Date.now() / 1000)
   const signatureParams = makeSignatureParams(kp.kid, created)
   const sigBase = buildSignatureBase(method, path, contentDigest, signatureParams)
@@ -73,7 +86,7 @@ export async function signRequest(
   return {
     'content-digest': contentDigest,
     'signature-input': `sig1=${signatureParams}`,
-    'signature': `sig1=:${Buffer.from(sigBytes).toString('base64')}:`,
+    'signature': `sig1=:${uint8ToBase64(sigBytes)}:`,
   }
 }
 
@@ -92,7 +105,7 @@ export async function verifyRequest(
     const { 'content-digest': contentDigest, 'signature-input': sigInputFull, 'signature': sigFull } = headers
 
     // Verify body integrity first (cheap hash check before expensive crypto)
-    const expectedDigest = computeContentDigest(bodyBytes)
+    const expectedDigest = await computeContentDigest(bodyBytes)
     if (contentDigest !== expectedDigest) return false
 
     // Parse sig1=<params> from Signature-Input
@@ -106,7 +119,7 @@ export async function verifyRequest(
     // Parse sig1=:base64: from Signature
     const sigMatch = sigFull.match(/^sig1=:([^:]+):$/)
     if (!sigMatch) return false
-    const sig = new Uint8Array(Buffer.from(sigMatch[1], 'base64'))
+    const sig = base64ToUint8(sigMatch[1])
 
     return await ed.verifyAsync(sig, new TextEncoder().encode(sigBase), publicKey)
   } catch {

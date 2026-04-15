@@ -1,18 +1,26 @@
 // SPDX-License-Identifier: Apache-2.0
-import { randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import * as ed from '@noble/ed25519'
 import type { AgentCard, MessageEnvelope, ResponseEnvelope, TaskRecord } from './types.js'
-import { generateKeypair, loadKeypair, saveKeypair, type Keypair } from './keys.js'
+import type { Keypair } from './keys.js'
 import { signRequest } from './signing.js'
 import { SamvadError, ErrorCode, type ErrorCodeType } from './errors.js'
 
-export interface AgentClientOptions {
-  keysDir?: string
+export interface BrowserAgentClientOptions {
+  keypair?: Keypair
   agentId?: string
 }
 
-export class AgentClient {
+/**
+ * A browser-compatible SAMVAD agent client.
+ *
+ * Unlike AgentClient, this class has zero Node.js dependencies:
+ * - No file I/O — keypair is generated in memory or passed in directly
+ * - No `node:crypto` — uses Web Crypto API (globalThis.crypto)
+ * - No `node:fs` or `node:path`
+ *
+ * Works in any environment with Web Crypto + fetch (browsers, Cloudflare Workers, Deno, Node 20+).
+ */
+export class BrowserAgentClient {
   public card: AgentCard | null = null
   private baseUrl: string | null = null
 
@@ -21,22 +29,25 @@ export class AgentClient {
     public readonly agentId: string,
   ) {}
 
-  /** Create a client without connecting. Used when you need the public key before connecting (e.g. to trust-peer it on the target agent). */
-  static async prepare(opts: AgentClientOptions = {}): Promise<AgentClient> {
-    const keysDir = opts.keysDir ?? join(process.cwd(), '.samvad', 'client-keys')
-    let kp: Keypair
-    const keyFile = join(keysDir, 'key-current.json')
-    if (existsSync(keyFile)) {
-      kp = await loadKeypair(keysDir, 'key-current')
-    } else {
-      kp = await generateKeypair('key-current')
-      await saveKeypair(kp, keysDir)
-    }
-    const agentId = opts.agentId ?? `agent://client.local`
-    return new AgentClient(kp, agentId)
+  /** Generate a fresh Ed25519 keypair for use with this client. */
+  static async generateKeypair(kid: string): Promise<Keypair> {
+    const privateKey = ed.utils.randomPrivateKey()
+    const publicKey = await ed.getPublicKeyAsync(privateKey)
+    return { kid, privateKey, publicKey }
   }
 
-  /** Connect to an already-prepared client's target agent. */
+  /**
+   * Create a client without connecting.
+   * If no keypair is provided, a new one is generated with kid "browser-client".
+   * Used when you need the public key before connecting (e.g. to trust-peer it on the target agent).
+   */
+  static async prepare(opts: BrowserAgentClientOptions = {}): Promise<BrowserAgentClient> {
+    const kp = opts.keypair ?? await BrowserAgentClient.generateKeypair('browser-client')
+    const agentId = opts.agentId ?? 'agent://browser.local'
+    return new BrowserAgentClient(kp, agentId)
+  }
+
+  /** Connect to a remote agent by fetching its AgentCard. */
   async connect(agentUrl: string): Promise<void> {
     this.baseUrl = agentUrl
     const cardRes = await fetch(`${agentUrl}/.well-known/agent.json`)
@@ -44,9 +55,9 @@ export class AgentClient {
     this.card = await cardRes.json() as AgentCard
   }
 
-  /** Convenience: prepare + connect in one call. Used when you don't need the public key in advance. */
-  static async from(agentUrl: string, opts: AgentClientOptions = {}): Promise<AgentClient> {
-    const client = await AgentClient.prepare(opts)
+  /** Convenience: prepare + connect in one call. */
+  static async from(agentUrl: string, opts: BrowserAgentClientOptions = {}): Promise<BrowserAgentClient> {
+    const client = await BrowserAgentClient.prepare(opts)
     await client.connect(agentUrl)
     return client
   }
@@ -57,7 +68,7 @@ export class AgentClient {
 
   private ensureConnected(): void {
     if (!this.baseUrl || !this.card) {
-      throw new Error('AgentClient is not connected. Call connect(agentUrl) first.')
+      throw new Error('BrowserAgentClient is not connected. Call connect(agentUrl) first.')
     }
   }
 
@@ -71,15 +82,14 @@ export class AgentClient {
       from: this.agentId,
       to: this.card!.id,
       skill, mode,
-      nonce: randomUUID(),
+      nonce: globalThis.crypto.randomUUID(),
       timestamp: new Date().toISOString(),
-      traceId: randomUUID(),
-      spanId: randomUUID(),
+      traceId: globalThis.crypto.randomUUID(),
+      spanId: globalThis.crypto.randomUUID(),
       payload,
     }
   }
 
-  /** Sign and send a POST request with RFC 9421 signature headers. */
   private async signedPost(url: string, body: object): Promise<Response> {
     const bodyStr = JSON.stringify(body)
     const bodyBytes = new TextEncoder().encode(bodyStr)

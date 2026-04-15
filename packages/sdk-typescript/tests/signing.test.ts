@@ -10,18 +10,18 @@ function toBytes(s: string): Uint8Array {
 }
 
 describe('computeContentDigest', () => {
-  it('produces a sha-256 Content-Digest header value', () => {
-    const digest = computeContentDigest(toBytes('hello'))
+  it('produces a sha-256 Content-Digest header value', async () => {
+    const digest = await computeContentDigest(toBytes('hello'))
     expect(digest).toMatch(/^sha-256=:[A-Za-z0-9+/]+=*:$/)
   })
 
-  it('is deterministic for the same input', () => {
+  it('is deterministic for the same input', async () => {
     const body = toBytes('{"key":"value"}')
-    expect(computeContentDigest(body)).toBe(computeContentDigest(body))
+    expect(await computeContentDigest(body)).toBe(await computeContentDigest(body))
   })
 
-  it('differs for different inputs', () => {
-    expect(computeContentDigest(toBytes('a'))).not.toBe(computeContentDigest(toBytes('b')))
+  it('differs for different inputs', async () => {
+    expect(await computeContentDigest(toBytes('a'))).not.toBe(await computeContentDigest(toBytes('b')))
   })
 })
 
