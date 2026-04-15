@@ -10,6 +10,34 @@ export interface BrowserAgentClientOptions {
   agentId?: string
 }
 
+// UUID v4 built on getRandomValues — works on Safari ≤15.3 and HTTP origins
+// (crypto.randomUUID() is unavailable pre-Safari 15.4 and requires a secure context)
+function randomUUID(): string {
+  const b = globalThis.crypto.getRandomValues(new Uint8Array(16))
+  b[6] = (b[6] & 0x0f) | 0x40   // version 4
+  b[8] = (b[8] & 0x3f) | 0x80   // variant bits
+  return (
+    hex(b, 0, 4) + '-' +
+    hex(b, 4, 6) + '-' +
+    hex(b, 6, 8) + '-' +
+    hex(b, 8, 10) + '-' +
+    hex(b, 10, 16)
+  )
+}
+
+function hex(b: Uint8Array, from: number, to: number): string {
+  return Array.from(b.slice(from, to)).map(x => x.toString(16).padStart(2, '0')).join('')
+}
+
+function assertSecureContext(): void {
+  if (typeof globalThis.crypto?.subtle === 'undefined') {
+    throw new Error(
+      'Web Crypto API (crypto.subtle) is unavailable. ' +
+      'BrowserAgentClient requires a secure context (HTTPS or localhost).',
+    )
+  }
+}
+
 /**
  * A browser-compatible SAMVAD agent client.
  *
@@ -19,6 +47,7 @@ export interface BrowserAgentClientOptions {
  * - No `node:fs` or `node:path`
  *
  * Works in any environment with Web Crypto + fetch (browsers, Cloudflare Workers, Deno, Node 20+).
+ * Requires a secure context (HTTPS or localhost) — crypto.subtle is unavailable on plain HTTP.
  */
 export class BrowserAgentClient {
   public card: AgentCard | null = null
@@ -31,6 +60,7 @@ export class BrowserAgentClient {
 
   /** Generate a fresh Ed25519 keypair for use with this client. */
   static async generateKeypair(kid: string): Promise<Keypair> {
+    assertSecureContext()
     const privateKey = ed.utils.randomPrivateKey()
     const publicKey = await ed.getPublicKeyAsync(privateKey)
     return { kid, privateKey, publicKey }
@@ -38,12 +68,14 @@ export class BrowserAgentClient {
 
   /**
    * Create a client without connecting.
-   * If no keypair is provided, a new one is generated with kid "browser-client".
-   * Used when you need the public key before connecting (e.g. to trust-peer it on the target agent).
+   * If no keypair is provided, a new one is generated.
+   * The default agentId incorporates the keypair's kid so concurrent instances don't collide
+   * in the server's per-sender rate limiter or knownPeers map.
    */
   static async prepare(opts: BrowserAgentClientOptions = {}): Promise<BrowserAgentClient> {
+    assertSecureContext()
     const kp = opts.keypair ?? await BrowserAgentClient.generateKeypair('browser-client')
-    const agentId = opts.agentId ?? 'agent://browser.local'
+    const agentId = opts.agentId ?? `agent://browser.${kp.kid}`
     return new BrowserAgentClient(kp, agentId)
   }
 
@@ -82,15 +114,16 @@ export class BrowserAgentClient {
       from: this.agentId,
       to: this.card!.id,
       skill, mode,
-      nonce: globalThis.crypto.randomUUID(),
+      nonce: randomUUID(),
       timestamp: new Date().toISOString(),
-      traceId: globalThis.crypto.randomUUID(),
-      spanId: globalThis.crypto.randomUUID(),
+      traceId: randomUUID(),
+      spanId: randomUUID(),
       payload,
     }
   }
 
-  private async signedPost(url: string, body: object): Promise<Response> {
+  /** Sign and POST a JSON body, returning the raw Response. */
+  private async signedFetch(url: string, body: object): Promise<Response> {
     const bodyStr = JSON.stringify(body)
     const bodyBytes = new TextEncoder().encode(bodyStr)
     const { pathname } = new URL(url)
@@ -105,7 +138,7 @@ export class BrowserAgentClient {
   async call(skill: string, payload: Record<string, unknown>): Promise<Record<string, unknown>> {
     this.ensureConnected()
     const body = this.buildBody(skill, 'sync', payload)
-    const res = await this.signedPost(`${this.baseUrl}/agent/message`, body)
+    const res = await this.signedFetch(`${this.baseUrl}/agent/message`, body)
     const respBody = await res.json() as ResponseEnvelope
     if (respBody.status === 'error') {
       throw new SamvadError(respBody.error!.code as ErrorCodeType, respBody.error!.message)
@@ -117,7 +150,7 @@ export class BrowserAgentClient {
     this.ensureConnected()
     const body: Record<string, unknown> = { ...this.buildBody(skill, 'async', payload) }
     if (callbackUrl) body.callbackUrl = callbackUrl
-    const res = await this.signedPost(`${this.baseUrl}/agent/task`, body)
+    const res = await this.signedFetch(`${this.baseUrl}/agent/task`, body)
     const result = await res.json() as { taskId: string; status: string }
     return result.taskId
   }
@@ -136,6 +169,7 @@ export class BrowserAgentClient {
     while (Date.now() < deadline) {
       await new Promise(r => setTimeout(r, interval))
       const res = await fetch(`${this.baseUrl}/agent/task/${taskId}`)
+      if (!res.ok) throw new SamvadError(ErrorCode.AGENT_UNAVAILABLE, `Task poll returned HTTP ${res.status}`)
       const task = await res.json() as TaskRecord
       if (task.status === 'done') return task.result!
       if (task.status === 'failed') {
@@ -148,16 +182,13 @@ export class BrowserAgentClient {
   async *stream(skill: string, payload: Record<string, unknown>): AsyncGenerator<unknown> {
     this.ensureConnected()
     const body = this.buildBody(skill, 'stream', payload)
-    const url = `${this.baseUrl}/agent/stream`
-    const bodyStr = JSON.stringify(body)
-    const bodyBytes = new TextEncoder().encode(bodyStr)
-    const { pathname } = new URL(url)
-    const sigHeaders = await signRequest('POST', pathname, bodyBytes, this.keypair)
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', ...sigHeaders },
-      body: bodyStr,
-    })
+    const res = await this.signedFetch(`${this.baseUrl}/agent/stream`, body)
+    if (!res.ok) {
+      const err = await res.json().catch(() => null) as ResponseEnvelope | null
+      const code = (err?.error?.code ?? ErrorCode.AGENT_UNAVAILABLE) as ErrorCodeType
+      const msg = err?.error?.message ?? `Stream request failed with HTTP ${res.status}`
+      throw new SamvadError(code, msg)
+    }
     if (!res.body) throw new Error('No response body for stream')
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
@@ -167,11 +198,12 @@ export class BrowserAgentClient {
       const { done, value } = await reader.read()
       if (done) break
       buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n\n')
-      buffer = lines.pop() ?? ''
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = JSON.parse(line.slice(6))
+      const blocks = buffer.split('\n\n')
+      buffer = blocks.pop() ?? ''
+      for (const block of blocks) {
+        const trimmed = block.trim()
+        if (trimmed.startsWith('data: ')) {
+          const data = JSON.parse(trimmed.slice(6))
           if (data.done) {
             if (data.error) throw new SamvadError(data.error.code as ErrorCodeType, data.error.message)
             return

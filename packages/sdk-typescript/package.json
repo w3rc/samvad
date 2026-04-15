@@ -37,6 +37,7 @@
       "types": "./dist/index.d.ts"
     },
     "./browser": {
+      "browser": "./dist/browser-client.js",
       "import": "./dist/browser-client.js",
       "types": "./dist/browser-client.d.ts"
     }

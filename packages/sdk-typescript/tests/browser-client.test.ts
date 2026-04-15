@@ -19,18 +19,23 @@ const MOCK_CARD: AgentCard = {
   name: 'Test Agent',
   description: 'A test agent',
   version: '1.0.0',
+  url: AGENT_URL,
   protocolVersion: '1.2',
-  endpoint: `${AGENT_URL}/agent/message`,
+  specializations: [],
+  models: [],
+  auth: { schemes: ['samvad-ed25519'] },
+  cardTTL: 300,
+  skills: [],
+  publicKeys: [{ kid: 'key-1', key: 'AAAA', active: true }],
+  rateLimit: { requestsPerMinute: 60, requestsPerSender: 100 },
   endpoints: {
+    intro: `${AGENT_URL}/agent/intro`,
     message: `${AGENT_URL}/agent/message`,
     task: `${AGENT_URL}/agent/task`,
+    taskStatus: `${AGENT_URL}/agent/task/:taskId`,
     stream: `${AGENT_URL}/agent/stream`,
     health: `${AGENT_URL}/agent/health`,
-    intro: `${AGENT_URL}/agent/intro`,
   },
-  skills: [],
-  publicKeys: [{ kid: 'key-1', publicKey: 'AAAA', active: true }],
-  rateLimit: { requestsPerMinute: 60, requestsPerSender: 100 },
 }
 
 function mockFetch(responses: Array<{ ok: boolean; body: unknown }>) {
@@ -70,7 +75,7 @@ describe('BrowserAgentClient.prepare', () => {
   it('generates a keypair if none is provided', async () => {
     const client = await BrowserAgentClient.prepare()
     expect(client.publicKey).toBeInstanceOf(Uint8Array)
-    expect(client.agentId).toBe('agent://browser.local')
+    expect(client.agentId).toContain('agent://browser.')
   })
 
   it('uses provided keypair and agentId', async () => {
@@ -78,6 +83,14 @@ describe('BrowserAgentClient.prepare', () => {
     const client = await BrowserAgentClient.prepare({ keypair: kp, agentId: 'agent://custom' })
     expect(client.publicKey).toEqual(kp.publicKey)
     expect(client.agentId).toBe('agent://custom')
+  })
+
+  it('default agentId incorporates the kid so two instances differ', async () => {
+    const kp1 = await BrowserAgentClient.generateKeypair('key-a')
+    const kp2 = await BrowserAgentClient.generateKeypair('key-b')
+    const c1 = await BrowserAgentClient.prepare({ keypair: kp1 })
+    const c2 = await BrowserAgentClient.prepare({ keypair: kp2 })
+    expect(c1.agentId).not.toBe(c2.agentId)
   })
 })
 
@@ -107,6 +120,7 @@ describe('BrowserAgentClient.from', () => {
 describe('BrowserAgentClient.call', () => {
   it('sends a sync request and returns the result', async () => {
     const successResponse: ResponseEnvelope = {
+      traceId: 'tr-1', spanId: 'sp-1',
       status: 'ok',
       result: { answer: 42 },
     }
@@ -121,6 +135,7 @@ describe('BrowserAgentClient.call', () => {
 
   it('throws SamvadError on error response', async () => {
     const errorResponse: ResponseEnvelope = {
+      traceId: 'tr-1', spanId: 'sp-1',
       status: 'error',
       error: { code: ErrorCode.SKILL_NOT_FOUND, message: 'no such skill' },
     }
@@ -154,8 +169,12 @@ describe('BrowserAgentClient.task', () => {
 
 describe('BrowserAgentClient.taskAndPoll', () => {
   it('polls until done and returns result', async () => {
-    const pendingRecord: TaskRecord = { id: 'task-1', status: 'pending' }
-    const doneRecord: TaskRecord = { id: 'task-1', status: 'done', result: { out: 'value' } }
+    const pendingRecord: TaskRecord = {
+      taskId: 'task-1', status: 'pending', createdAt: Date.now(),
+    }
+    const doneRecord: TaskRecord = {
+      taskId: 'task-1', status: 'done', result: { out: 'value' }, createdAt: Date.now(),
+    }
     globalThis.fetch = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(MOCK_CARD) })
       .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ taskId: 'task-1', status: 'pending' }) })
@@ -169,8 +188,7 @@ describe('BrowserAgentClient.taskAndPoll', () => {
 
   it('throws on task failure', async () => {
     const failedRecord: TaskRecord = {
-      id: 'task-2',
-      status: 'failed',
+      taskId: 'task-2', status: 'failed', createdAt: Date.now(),
       error: { code: ErrorCode.AGENT_UNAVAILABLE, message: 'crashed' },
     }
     globalThis.fetch = vi.fn()
@@ -183,16 +201,24 @@ describe('BrowserAgentClient.taskAndPoll', () => {
       code: ErrorCode.AGENT_UNAVAILABLE,
     })
   })
+
+  it('throws immediately when poll returns non-200', async () => {
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(MOCK_CARD) })
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ taskId: 'task-3', status: 'pending' }) })
+      .mockResolvedValueOnce({ ok: false, status: 404, json: () => Promise.resolve({}) })
+
+    const client = await BrowserAgentClient.from(AGENT_URL)
+    await expect(client.taskAndPoll('missing', {}, { intervalMs: 1 })).rejects.toMatchObject({
+      code: ErrorCode.AGENT_UNAVAILABLE,
+    })
+  })
 })
 
 describe('BrowserAgentClient.stream', () => {
   it('yields SSE chunks and completes', async () => {
-    const sseData = [
-      'data: {"chunk":"hello"}\n\n',
-      'data: {"chunk":"world"}\n\n',
-      'data: {"done":true}\n\n',
-    ].join('')
-
+    // Chunks intentionally straddle the \n\n event boundary
+    const sseData = 'data: {"chunk":"hello"}\n\ndata: {"chunk":"world"}\n\ndata: {"done":true}\n\n'
     const encoder = new TextEncoder()
     const encoded = encoder.encode(sseData)
     let offset = 0
@@ -200,6 +226,7 @@ describe('BrowserAgentClient.stream', () => {
     const mockReader = {
       read: vi.fn().mockImplementation(() => {
         if (offset >= encoded.length) return Promise.resolve({ done: true, value: undefined })
+        // 20-byte chunks to exercise buffer splitting across \n\n boundaries
         const chunk = encoded.slice(offset, offset + 20)
         offset += 20
         return Promise.resolve({ done: false, value: chunk })
@@ -219,5 +246,24 @@ describe('BrowserAgentClient.stream', () => {
       chunks.push(chunk)
     }
     expect(chunks).toEqual(['hello', 'world'])
+  })
+
+  it('throws SamvadError when stream response is not ok', async () => {
+    const errorBody: ResponseEnvelope = {
+      traceId: 'tr-1', spanId: 'sp-1',
+      status: 'error',
+      error: { code: ErrorCode.AUTH_FAILED, message: 'bad signature' },
+    }
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(MOCK_CARD) })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve(errorBody),
+      })
+
+    const client = await BrowserAgentClient.from(AGENT_URL)
+    const gen = client.stream('generate', {})
+    await expect(gen.next()).rejects.toMatchObject({ code: ErrorCode.AUTH_FAILED })
   })
 })
