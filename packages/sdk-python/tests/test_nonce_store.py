@@ -6,7 +6,6 @@ import pytest
 
 from samvad.nonce_store import InMemoryNonceStore, UpstashRedisNonceStore
 
-
 # ── InMemoryNonceStore ────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
@@ -108,9 +107,10 @@ async def test_redis_check_uses_nx_and_positive_px():
     store = UpstashRedisNonceStore(redis)
     await store.check("alice", "n1", int(time.time()))
     redis.set.assert_called_once()
-    _, kwargs = redis.set.call_args.args, redis.set.call_args.kwargs
-    assert redis.set.call_args.kwargs.get("nx") is True or redis.set.call_args.args[2] is True or True  # flexible arg check
-    call_kwargs = {**dict(zip(["key", "value", "nx", "px"], redis.set.call_args.args)), **redis.set.call_args.kwargs}
+    call_kwargs = {
+        **dict(zip(["key", "value", "nx", "px"], redis.set.call_args.args, strict=False)),
+        **redis.set.call_args.kwargs,
+    }
     assert call_kwargs.get("nx") is True
     assert call_kwargs.get("px", 0) > 0
 
@@ -131,7 +131,10 @@ async def test_redis_commit_overwrites_without_nx():
     store = UpstashRedisNonceStore(redis)
     now = int(time.time())
     await store.commit("alice", "n1", now)
-    call_kwargs = {**dict(zip(["key", "value", "nx", "px"], redis.set.call_args.args)), **redis.set.call_args.kwargs}
+    call_kwargs = {
+        **dict(zip(["key", "value", "nx", "px"], redis.set.call_args.args, strict=False)),
+        **redis.set.call_args.kwargs,
+    }
     # nx must be False (or absent) for commit — it's an overwrite
     assert not call_kwargs.get("nx", False)
     assert call_kwargs.get("px", 0) > 0
