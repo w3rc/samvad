@@ -31,7 +31,7 @@ function base64ToUint8(b64: string): Uint8Array {
 
 // Compute Content-Digest header value per RFC 9530
 export async function computeContentDigest(bodyBytes: Uint8Array): Promise<string> {
-  const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', bodyBytes)
+  const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', bodyBytes as unknown as BufferSource)
   return `sha-256=:${uint8ToBase64(new Uint8Array(hashBuffer))}:`
 }
 
